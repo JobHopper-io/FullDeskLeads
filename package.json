@@ -1,0 +1,24 @@
+{
+  "name": "full-desk-leads",
+  "private": true,
+  "packageManager": "pnpm@11.5.2",
+  "scripts": {
+    "dev:api": "pnpm --filter @fdl/api dev",
+    "dev:workers": "pnpm --filter @fdl/workers dev",
+    "dev:web": "pnpm --filter @fdl/web dev",
+    "build": "pnpm -r --filter=./packages/* --filter=./apps/api --filter=./apps/workers build",
+    "seed": "tsx scripts/dev-seed.ts",
+    "pipeline:once": "tsx scripts/run-pipeline-once.ts"
+  },
+  "dependencies": {
+    "@fdl/db": "workspace:*",
+    "@fdl/pipeline": "workspace:*",
+    "@fdl/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

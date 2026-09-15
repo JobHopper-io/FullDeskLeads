@@ -1,0 +1,2 @@
+-- TODO(day 2): enable RLS on every table; tenant_id-scoped policies for API-facing reads.
+-- Service-role key (workers) bypasses RLS — never used from apps/api request handlers.

@@ -1,0 +1,3 @@
+-- TODO(day 2): tenant, seat, company, hiring_signal, contact, lead, lead_assignment,
+-- configuration, exclusion, score_record, interaction_event, raw_signal.
+-- tenant_id on every tenant-scoped table; index every column referenced in an RLS policy.

@@ -1,0 +1,20 @@
+{
+  "name": "@fdl/pipeline",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fdl/contracts": "workspace:*",
+    "@fdl/shared": "workspace:*",
+    "pino": "^9.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,6 @@
+/* TODO(day 12): brand tokens, single source of truth. Import from index.css once the interface work starts. */
+:root {
+  --color-primary: #163e33;
+  --color-background: #f8f8f5;
+  --color-text: #1e2221;
+}
