@@ -1,12 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { InteractionEventRow } from "../types.js";
 
-// TODO(day 13): one outcome action writes a row here against a lead_assignment.
 export function interactionEventRepository(db: SupabaseClient) {
   return {
-    create: async (event: { leadAssignmentId: string; type: string }) => {
+    // Day 13: the one outcome action, writing an event against the lead_assignment it belongs to.
+    create: async (input: {
+      tenantId: string;
+      leadAssignmentId: string;
+      seatId?: string | null;
+      eventType: string;
+      payload?: unknown;
+    }): Promise<InteractionEventRow> => {
       const { data, error } = await db
-        .from("interaction_event")
-        .insert({ lead_assignment_id: event.leadAssignmentId, type: event.type })
+        .from("interaction_events")
+        .insert({
+          tenant_id: input.tenantId,
+          lead_assignment_id: input.leadAssignmentId,
+          seat_id: input.seatId ?? null,
+          event_type: input.eventType,
+          payload: input.payload ?? {},
+        })
         .select()
         .single();
       if (error) throw error;

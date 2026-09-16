@@ -1,14 +1,15 @@
 {
   "name": "full-desk-leads",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.5.2",
   "scripts": {
     "dev:api": "pnpm --filter @fdl/api dev",
     "dev:workers": "pnpm --filter @fdl/workers dev",
     "dev:web": "pnpm --filter @fdl/web dev",
     "build": "pnpm -r --filter=./packages/* --filter=./apps/api --filter=./apps/workers build",
-    "seed": "tsx scripts/dev-seed.ts",
-    "pipeline:once": "tsx scripts/run-pipeline-once.ts"
+    "seed": "tsx --env-file=.env scripts/dev-seed.ts",
+    "pipeline:once": "tsx --env-file=.env scripts/run-pipeline-once.ts"
   },
   "dependencies": {
     "@fdl/db": "workspace:*",
