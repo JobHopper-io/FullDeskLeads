@@ -10,9 +10,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fdl/contracts": "workspace:*"
+    "@fdl/contracts": "workspace:*",
+    "@fdl/shared": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "typescript": "^5.5.4"
   }
 }

@@ -3,11 +3,27 @@ import type { RawSignalRow } from "../types.js";
 
 export function rawSignalRepository(db: SupabaseClient) {
   return {
-    // Day 4-5 ingest: store the raw fetch before Zod validation.
-    create: async (input: { source: string; rawPayload: unknown; fetchedAt: string }): Promise<RawSignalRow> => {
+    findById: async (id: string): Promise<RawSignalRow | null> => {
+      const { data, error } = await db.from("raw_signals").select("*").eq("id", id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+
+    // Ingest: store the validated posting before it's resolved into a hiring_signal.
+    create: async (input: {
+      source: string;
+      sourceToken?: string | null;
+      rawPayload: unknown;
+      fetchedAt: string;
+    }): Promise<RawSignalRow> => {
       const { data, error } = await db
         .from("raw_signals")
-        .insert({ source: input.source, raw_payload: input.rawPayload, fetched_at: input.fetchedAt })
+        .insert({
+          source: input.source,
+          source_token: input.sourceToken ?? null,
+          raw_payload: input.rawPayload,
+          fetched_at: input.fetchedAt,
+        })
         .select()
         .single();
       if (error) throw error;

@@ -10,7 +10,8 @@
     "build": "pnpm -r --filter=./packages/* --filter=./apps/api --filter=./apps/workers build",
     "seed": "tsx --env-file=.env scripts/dev-seed.ts",
     "pipeline:once": "tsx --env-file=.env scripts/run-pipeline-once.ts",
-    "enqueue-test-job": "tsx --env-file=.env scripts/enqueue-test-job.ts"
+    "enqueue-test-job": "tsx --env-file=.env scripts/enqueue-test-job.ts",
+    "ingest:greenhouse": "tsx --env-file=.env scripts/run-greenhouse-ingest.ts"
   },
   "dependencies": {
     "@fdl/contracts": "workspace:*",

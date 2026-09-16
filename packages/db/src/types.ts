@@ -52,10 +52,21 @@ export interface CompanyRow {
 export interface RawSignalRow {
   id: string;
   source: string;
+  source_token: string | null;
   raw_payload: unknown;
   fetched_at: string;
   processed: boolean;
   processing_error: string | null;
+}
+
+export interface SourceCompanyRow {
+  id: string;
+  company_name: string;
+  source: string;
+  source_token: string;
+  domain: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface HiringSignalRow {

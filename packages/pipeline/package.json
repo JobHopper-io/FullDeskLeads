@@ -11,7 +11,10 @@
   },
   "dependencies": {
     "@fdl/contracts": "workspace:*",
+    "@fdl/db": "workspace:*",
     "@fdl/shared": "workspace:*",
+    "@fdl/sources": "workspace:*",
+    "@supabase/supabase-js": "^2.116.0",
     "pino": "^9.4.0"
   },
   "devDependencies": {

@@ -12,6 +12,8 @@
     "@bull-board/api": "^9.10.1",
     "@bull-board/fastify": "^9.10.1",
     "@fdl/contracts": "workspace:*",
+    "@fdl/db": "workspace:*",
+    "@fdl/pipeline": "workspace:*",
     "@fdl/queue": "workspace:*",
     "@fdl/shared": "workspace:*",
     "bullmq": "^5.12.12",

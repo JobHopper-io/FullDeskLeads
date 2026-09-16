@@ -3,6 +3,7 @@ export * from "./types.js";
 export * from "./repositories/tenantRepository.js";
 export * from "./repositories/seatRepository.js";
 export * from "./repositories/companyRepository.js";
+export * from "./repositories/sourceCompanyRepository.js";
 export * from "./repositories/rawSignalRepository.js";
 export * from "./repositories/hiringSignalRepository.js";
 export * from "./repositories/contactRepository.js";
