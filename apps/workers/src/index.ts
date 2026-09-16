@@ -1,5 +1,6 @@
-import { getRedisConnection } from "@fdl/queue";
+import { createQueue, QUEUE_NAMES } from "@fdl/queue";
 import { createLogger } from "@fdl/shared";
+import { startBullBoard } from "./board.js";
 import { createIngestWorker } from "./workers/ingest.worker.js";
 import { createNormalizeWorker } from "./workers/normalize.worker.js";
 import { createResolveIdentityWorker } from "./workers/resolve-identity.worker.js";
@@ -10,21 +11,22 @@ import { createScoreWorker } from "./workers/score.worker.js";
 import { createEmitWorker } from "./workers/emit.worker.js";
 
 const log = createLogger("workers");
-const connection = getRedisConnection(process.env.REDIS_URL ?? "redis://localhost:6379");
 
-connection.on("connect", () => log.info("connected to redis"));
-connection.on("error", (err) => log.error({ err }, "redis connection error"));
+createIngestWorker(log);
+createNormalizeWorker(log);
+createResolveIdentityWorker(log);
+createFilterWorker(log);
+createEnrichWorker(log);
+createSelectContactWorker(log);
+createScoreWorker(log);
+createEmitWorker(log);
 
-const pong = await connection.ping();
-log.info({ pong }, "redis ping");
+const activeQueues = Object.values(QUEUE_NAMES);
+log.info({ queues: activeQueues }, `all ${activeQueues.length} pipeline-stage workers listening`);
 
-createIngestWorker(connection, log);
-createNormalizeWorker(connection, log);
-createResolveIdentityWorker(connection, log);
-createFilterWorker(connection, log);
-createEnrichWorker(connection, log);
-createSelectContactWorker(connection, log);
-createScoreWorker(connection, log);
-createEmitWorker(connection, log);
-
-log.info("all pipeline-stage workers listening");
+const boardPort = Number(process.env.BULL_BOARD_PORT ?? 3001);
+await startBullBoard(
+  activeQueues.map((name) => createQueue(name)),
+  log,
+  boardPort,
+);

@@ -1,8 +1,7 @@
 import { Redis } from "ioredis";
 
-let connection: Redis | undefined;
-
-export function getRedisConnection(redisUrl: string): Redis {
-  connection ??= new Redis(redisUrl, { maxRetriesPerRequest: null });
-  return connection;
-}
+// Single shared connection, reused by every queue and worker in the process — BullMQ
+// recommends against opening one connection per queue/worker.
+export const redisConnection = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+  maxRetriesPerRequest: null,
+});

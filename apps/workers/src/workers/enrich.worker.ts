@@ -1,9 +1,14 @@
-import { Worker } from "bullmq";
-import type { Redis } from "ioredis";
-import { enrich } from "@fdl/pipeline";
 import type { Logger } from "pino";
+import type { Worker } from "bullmq";
+import { createWorker, createQueue, QUEUE_NAMES } from "@fdl/queue";
+import type { LeadContract } from "@fdl/contracts";
 
-export function createEnrichWorker(connection: Redis, log: Logger): Worker {
+const selectContactQueue = createQueue<LeadContract>(QUEUE_NAMES.SELECT_CONTACT);
+
+export function createEnrichWorker(log: Logger): Worker<LeadContract> {
   // TODO(day 8): set a concurrency limit — every Seamless.AI call has a real cost.
-  return new Worker("enrich", (job) => enrich(job.data, log), { connection });
+  return createWorker<LeadContract>(QUEUE_NAMES.ENRICH, async (job) => {
+    log.info({ stage: "enrich", jobId: job.id, payload: job.data }, "stage received job");
+    await selectContactQueue.add(QUEUE_NAMES.SELECT_CONTACT, job.data);
+  });
 }

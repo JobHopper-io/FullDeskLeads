@@ -1,8 +1,13 @@
-import { Worker } from "bullmq";
-import type { Redis } from "ioredis";
-import { normalize } from "@fdl/pipeline";
 import type { Logger } from "pino";
+import type { Worker } from "bullmq";
+import { createWorker, createQueue, QUEUE_NAMES } from "@fdl/queue";
+import type { LeadContract } from "@fdl/contracts";
 
-export function createNormalizeWorker(connection: Redis, log: Logger): Worker {
-  return new Worker("normalize", (job) => normalize(job.data, log), { connection });
+const resolveIdentityQueue = createQueue<LeadContract>(QUEUE_NAMES.RESOLVE_IDENTITY);
+
+export function createNormalizeWorker(log: Logger): Worker<LeadContract> {
+  return createWorker<LeadContract>(QUEUE_NAMES.NORMALIZE, async (job) => {
+    log.info({ stage: "normalize", jobId: job.id, payload: job.data }, "stage received job");
+    await resolveIdentityQueue.add(QUEUE_NAMES.RESOLVE_IDENTITY, job.data);
+  });
 }

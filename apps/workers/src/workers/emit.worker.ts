@@ -1,8 +1,10 @@
-import { Worker } from "bullmq";
-import type { Redis } from "ioredis";
-import { emit } from "@fdl/pipeline";
 import type { Logger } from "pino";
+import type { Worker } from "bullmq";
+import { createWorker, QUEUE_NAMES } from "@fdl/queue";
+import type { LeadContract } from "@fdl/contracts";
 
-export function createEmitWorker(connection: Redis, log: Logger): Worker {
-  return new Worker("emit", (job) => emit(job.data, log), { connection });
+export function createEmitWorker(log: Logger): Worker<LeadContract> {
+  return createWorker<LeadContract>(QUEUE_NAMES.EMIT, async (job) => {
+    log.info({ stage: "emit", jobId: job.id, payload: job.data }, "stage received job — pipeline complete");
+  });
 }

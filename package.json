@@ -9,11 +9,14 @@
     "dev:web": "pnpm --filter @fdl/web dev",
     "build": "pnpm -r --filter=./packages/* --filter=./apps/api --filter=./apps/workers build",
     "seed": "tsx --env-file=.env scripts/dev-seed.ts",
-    "pipeline:once": "tsx --env-file=.env scripts/run-pipeline-once.ts"
+    "pipeline:once": "tsx --env-file=.env scripts/run-pipeline-once.ts",
+    "enqueue-test-job": "tsx --env-file=.env scripts/enqueue-test-job.ts"
   },
   "dependencies": {
+    "@fdl/contracts": "workspace:*",
     "@fdl/db": "workspace:*",
     "@fdl/pipeline": "workspace:*",
+    "@fdl/queue": "workspace:*",
     "@fdl/shared": "workspace:*"
   },
   "devDependencies": {

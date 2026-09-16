@@ -1,8 +1,13 @@
-import { Worker } from "bullmq";
-import type { Redis } from "ioredis";
-import { selectContact } from "@fdl/pipeline";
 import type { Logger } from "pino";
+import type { Worker } from "bullmq";
+import { createWorker, createQueue, QUEUE_NAMES } from "@fdl/queue";
+import type { LeadContract } from "@fdl/contracts";
 
-export function createSelectContactWorker(connection: Redis, log: Logger): Worker {
-  return new Worker("select-contact", (job) => selectContact(job.data, log), { connection });
+const scoreQueue = createQueue<LeadContract>(QUEUE_NAMES.SCORE);
+
+export function createSelectContactWorker(log: Logger): Worker<LeadContract> {
+  return createWorker<LeadContract>(QUEUE_NAMES.SELECT_CONTACT, async (job) => {
+    log.info({ stage: "select-contact", jobId: job.id, payload: job.data }, "stage received job");
+    await scoreQueue.add(QUEUE_NAMES.SCORE, job.data);
+  });
 }
