@@ -1,13 +1,22 @@
 import { createServiceClient, sourceCompanyRepository } from "@fdl/db";
 import { runIngestForCompany, normalizeRawSignal } from "@fdl/pipeline";
+import { getSource } from "@fdl/sources";
 import { loadEnv, createLogger } from "@fdl/shared";
 
 // Fast local debugging path: calls the pipeline functions directly, bypassing BullMQ/Redis
-// entirely, so you can see real ingest+normalize results in the terminal.
-const log = createLogger("run-greenhouse-ingest");
+// entirely, so you can see real ingest+normalize results in the terminal, for any registered
+// source — e.g. `tsx scripts/run-ingest.ts greenhouse` or `tsx scripts/run-ingest.ts lever`.
+const sourceName = process.argv[2];
+if (!sourceName) {
+  console.error("Usage: tsx scripts/run-ingest.ts <source>  (e.g. greenhouse, lever)");
+  process.exit(1);
+}
+getSource(sourceName); // fails fast with a clear error if this source isn't registered
+
+const log = createLogger(`run-ingest:${sourceName}`);
 const db = createServiceClient(loadEnv());
 
-const sourceCompanies = await sourceCompanyRepository(db).listActiveBySource("greenhouse");
+const sourceCompanies = await sourceCompanyRepository(db).listActiveBySource(sourceName);
 
 let companiesProcessed = 0;
 let postingsInserted = 0;
@@ -30,14 +39,14 @@ for (const sourceCompany of sourceCompanies) {
       if (result.wasNewCompany) newCompaniesCreated++;
     }
   } catch (err) {
-    // One company's failure (bad token aside, already handled inside GreenhouseSource) never
+    // One company's failure (bad token aside, already handled inside each SignalSource) never
     // stops the rest of the batch.
     log.error({ company: sourceCompany.company_name, err }, "ingest failed for company — continuing");
   }
 }
 
 console.log(`
-Greenhouse ingest summary
+${sourceName} ingest summary
 --------------------------
 Companies processed:   ${companiesProcessed}
 Postings inserted:     ${postingsInserted}

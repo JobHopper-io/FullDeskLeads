@@ -23,6 +23,9 @@ importers:
       '@fdl/shared':
         specifier: workspace:*
         version: link:packages/shared
+      '@fdl/sources':
+        specifier: workspace:*
+        version: link:packages/sources
     devDependencies:
       tsx:
         specifier: ^4.16.2
