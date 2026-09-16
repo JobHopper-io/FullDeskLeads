@@ -44,6 +44,19 @@ function normalizeCompanyName(name: string): string {
   return words.join(" ");
 }
 
+/**
+ * Normalizes a location for *comparison only* — never stored, never shown. Trimmed,
+ * lowercased, exact match required. Confirmed against real cross-source data (Crest
+ * Industries, Andersen Corporation) that the same city is always written the same way by a
+ * given source — "Lexington, KY" and "Montgomery, Alabama" both occur, but never two spellings
+ * of the same city — so simple normalization is sufficient; no state-abbreviation canonicalizing.
+ */
+function normalizeLocationForComparison(location: string | null): string | null {
+  if (location === null) return null;
+  const normalized = location.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
 /** fresh: 0-2 days, recent: 3-7, ageing: 8-14, stale: 15+ — from postedDate if present, else detectedAt. */
 function computeFreshnessBand(referenceDate: Date, now: Date): HiringSignalFreshnessBand {
   const ageDays = Math.max(0, (now.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -69,8 +82,15 @@ function computeFreshnessBand(referenceDate: Date, now: Date): HiringSignalFresh
  * Dedup: the (company_id, source, source_posting_id) unique index in the DB already collapses
  * the *same* source re-posting the *same* job. This check is for the same real-world job
  * appearing under a *different* posting id — same company, detected recently, similar-enough
- * title. Uses pg_trgm similarity (via find_similar_hiring_signal, see migration 0008) rather
- * than exact matching, since two sources rarely word the same role identically.
+ * title, AND the same location. Uses pg_trgm similarity (via find_similar_hiring_signal, see
+ * migration 0010) rather than exact title matching, since two sources rarely word the same role
+ * identically — but title similarity alone isn't enough: the same title text posted in two
+ * different real cities are two different real openings, not one (confirmed false positive:
+ * "Residential Marketing Associate - Lenexa, KS" vs "...- Albert Lea, MN" scored 0.654 on title
+ * alone and were wrongly collapsed). A candidate only counts as a duplicate when title
+ * similarity crosses the threshold AND the normalized locations match. If either side has no
+ * location, there's nothing to gate on — falls back to title-only and logs a warning, since
+ * that's a strictly less reliable comparison and should be visible, not silent.
  */
 export async function normalizeRawSignal(
   rawSignalId: string,
@@ -129,11 +149,33 @@ export async function normalizeRawSignal(
 
   const detectedSince = new Date(Date.now() - DEDUP_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const candidates = await hiringSignals.findSimilarHiringSignals(companyId, posting.title, detectedSince);
+  const incomingLocation = normalizeLocationForComparison(posting.location);
 
   // Log every comparison, not just the ones that end up flagged as duplicates — this is how a
   // real distribution of cross-source similarity scores gets built to validate or retune
   // DEDUP_SIMILARITY_THRESHOLD later.
+  let duplicate: (typeof candidates)[number] | undefined;
   for (const candidate of candidates) {
+    const candidateLocation = normalizeLocationForComparison(candidate.location);
+    const hasLocationSignal = incomingLocation !== null && candidateLocation !== null;
+    const titleCrossed = candidate.similarityScore >= DEDUP_SIMILARITY_THRESHOLD;
+    const locationMatches = hasLocationSignal ? incomingLocation === candidateLocation : true;
+    const crossedThreshold = titleCrossed && locationMatches;
+
+    if (!hasLocationSignal) {
+      log.warn(
+        {
+          companyId,
+          incomingTitle: posting.title,
+          candidateTitle: candidate.roleTitle,
+          candidateHiringSignalId: candidate.hiringSignalId,
+          incomingLocation: posting.location,
+          candidateLocation: candidate.location,
+        },
+        "duplicate comparison lacks a location signal on one side — falling back to title-only match",
+      );
+    }
+
     log.info(
       {
         companyId,
@@ -142,13 +184,19 @@ export async function normalizeRawSignal(
         candidateHiringSignalId: candidate.hiringSignalId,
         similarityScore: candidate.similarityScore,
         threshold: DEDUP_SIMILARITY_THRESHOLD,
-        crossedThreshold: candidate.similarityScore >= DEDUP_SIMILARITY_THRESHOLD,
+        incomingLocation: posting.location,
+        candidateLocation: candidate.location,
+        hasLocationSignal,
+        locationMatches,
+        crossedThreshold,
       },
       "cross-source title similarity comparison",
     );
-  }
 
-  const duplicate = candidates.find((candidate) => candidate.similarityScore >= DEDUP_SIMILARITY_THRESHOLD);
+    if (crossedThreshold && !duplicate) {
+      duplicate = candidate;
+    }
+  }
 
   if (duplicate) {
     await rawSignals.markProcessed(rawSignalId);
