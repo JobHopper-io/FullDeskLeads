@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const hiringSignalFreshnessBandSchema = z.enum(["fresh", "recent", "ageing", "stale"]);
-export const hiringSignalStatusSchema = z.enum(["active", "filtered", "expired"]);
+export const hiringSignalStatusSchema = z.enum(["active", "filtered", "expired", "excluded"]);
 
 // Mirrors packages/db/migrations/0001_core_schema.sql `hiring_signals` table.
 export const hiringSignalSchema = z.object({
