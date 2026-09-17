@@ -6,6 +6,7 @@ const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
   PORT: z.coerce.number().default(3000),
+  SEAMLESS_API_KEY: z.string().min(1),
 });
 
 export type Env = z.infer<typeof envSchema>;

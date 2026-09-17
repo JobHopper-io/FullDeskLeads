@@ -167,6 +167,9 @@ importers:
       '@fdl/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@fdl/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       typescript:
         specifier: ^5.5.4
@@ -180,6 +183,9 @@ importers:
       '@fdl/db':
         specifier: workspace:*
         version: link:../db
+      '@fdl/enrichment':
+        specifier: workspace:*
+        version: link:../enrichment
       '@fdl/shared':
         specifier: workspace:*
         version: link:../shared
