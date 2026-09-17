@@ -3,6 +3,13 @@ import type { CompanyOwnershipType, CompanyRevenueBand, CompanyRow, CompanySizeB
 
 export function companyRepository(db: SupabaseClient) {
   return {
+    // Day 8 enrichment: load the company a hiring_signal belongs to, to read its domain.
+    findById: async (id: string): Promise<CompanyRow | null> => {
+      const { data, error } = await db.from("companies").select("*").eq("id", id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+
     // Day 4-5 identity resolution: match an incoming posting's company by domain.
     findByDomain: async (domain: string): Promise<CompanyRow | null> => {
       const { data, error } = await db

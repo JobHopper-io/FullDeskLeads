@@ -3,9 +3,13 @@ import type { ContactRow } from "../types.js";
 
 export function contactRepository(db: SupabaseClient) {
   return {
-    // Day 8 enrichment: write a Seamless.AI hit.
+    // Day 8 enrichment: write a Seamless.AI hit. hiringSignalId is required (not optional) —
+    // a contact row is one enrichment result for one specific hiring_signal, not a company-wide
+    // cache (see migration 0011). The column itself is nullable only to accommodate the 3 rows
+    // written before it existed.
     create: async (input: {
       companyId: string;
+      hiringSignalId: string;
       name: string;
       title: string;
       phone?: string | null;
@@ -18,6 +22,7 @@ export function contactRepository(db: SupabaseClient) {
         .from("contacts")
         .insert({
           company_id: input.companyId,
+          hiring_signal_id: input.hiringSignalId,
           name: input.name,
           title: input.title,
           phone: input.phone ?? null,

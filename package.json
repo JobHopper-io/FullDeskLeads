@@ -11,7 +11,8 @@
     "seed": "tsx --env-file=.env scripts/dev-seed.ts",
     "pipeline:once": "tsx --env-file=.env scripts/run-pipeline-once.ts",
     "enqueue-test-job": "tsx --env-file=.env scripts/enqueue-test-job.ts",
-    "ingest": "tsx --env-file=.env scripts/run-ingest.ts"
+    "ingest": "tsx --env-file=.env scripts/run-ingest.ts",
+    "enrich": "tsx --env-file=.env scripts/run-enrichment.ts"
   },
   "dependencies": {
     "@fdl/contracts": "workspace:*",

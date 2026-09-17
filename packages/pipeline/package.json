@@ -12,6 +12,7 @@
   "dependencies": {
     "@fdl/contracts": "workspace:*",
     "@fdl/db": "workspace:*",
+    "@fdl/enrichment": "workspace:*",
     "@fdl/shared": "workspace:*",
     "@fdl/sources": "workspace:*",
     "@supabase/supabase-js": "^2.116.0",

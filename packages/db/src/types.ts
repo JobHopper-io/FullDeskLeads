@@ -9,7 +9,7 @@ export type CompanySizeBand = "startup" | "small" | "mid_market" | "growth" | "e
 export type CompanyRevenueBand = "under_1m" | "1m_10m" | "10m_50m" | "50m_250m" | "250m_plus";
 export type CompanyOwnershipType = "independent" | "pe_backed" | "family_owned" | "public";
 export type HiringSignalFreshnessBand = "fresh" | "recent" | "ageing" | "stale";
-export type HiringSignalStatus = "active" | "filtered" | "expired";
+export type HiringSignalStatus = "active" | "filtered" | "expired" | "excluded";
 export type LeadStatus = "draft" | "ready" | "quarantined";
 export type ExclusionType =
   | "do_not_contact"
@@ -82,12 +82,14 @@ export interface HiringSignalRow {
   detected_at: string;
   freshness_band: HiringSignalFreshnessBand | null;
   status: HiringSignalStatus;
+  status_reason: string | null;
   created_at: string;
 }
 
 export interface ContactRow {
   id: string;
   company_id: string;
+  hiring_signal_id: string | null;
   name: string;
   title: string;
   phone: string | null;
@@ -99,6 +101,18 @@ export interface ContactRow {
   source_contact_id: string | null;
   verified_at: string | null;
   created_at: string;
+}
+
+export interface EnrichmentAttemptRow {
+  id: string;
+  hiring_signal_id: string;
+  status: string;
+  contact_id: string | null;
+  confidence: number | null;
+  message: string | null;
+  request_id: string | null;
+  search_result_id: string | null;
+  attempted_at: string;
 }
 
 export interface LeadRow {

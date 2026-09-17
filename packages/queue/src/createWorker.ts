@@ -5,7 +5,7 @@ import type { QueueName } from "./queueNames.js";
 export function createWorker<Payload = unknown, Result = unknown>(
   name: QueueName,
   processor: Processor<Payload, Result>,
-  options?: WorkerOptions,
+  options?: Omit<WorkerOptions, "connection">,
 ): Worker<Payload, Result> {
   return new Worker<Payload, Result>(name, processor, { connection: redisConnection, ...options });
 }
