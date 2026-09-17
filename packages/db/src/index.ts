@@ -7,6 +7,7 @@ export * from "./repositories/sourceCompanyRepository.js";
 export * from "./repositories/rawSignalRepository.js";
 export * from "./repositories/hiringSignalRepository.js";
 export * from "./repositories/contactRepository.js";
+export * from "./repositories/enrichmentAttemptRepository.js";
 export * from "./repositories/leadRepository.js";
 export * from "./repositories/leadAssignmentRepository.js";
 export * from "./repositories/configurationRepository.js";

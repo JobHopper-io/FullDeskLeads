@@ -70,9 +70,42 @@ export function hiringSignalRepository(db: SupabaseClient) {
       );
     },
 
-    // Day 6 early filter.
-    setStatus: async (id: string, status: HiringSignalStatus): Promise<void> => {
-      const { error } = await db.from("hiring_signals").update({ status }).eq("id", id);
+    // Day 8 run-enrichment script: active hiring_signals with no contacts row of their own yet.
+    // Confirmed bug (fixed by migration 0011): this used to check company_id, which meant a
+    // contact found for *any one* role at a company caused every other hiring_signal there —
+    // regardless of role — to be wrongly skipped. Scoped to hiring_signal_id directly now — one
+    // contact per hiring_signal, not one per company. Two queries rather than a SQL anti-join,
+    // fine at current data volume.
+    //
+    // status = 'active' matters here, not just as a default: this is a second, direct path into
+    // enrichHiringSignal that bypasses the filter/enrich queue entirely (run-enrichment.ts calls
+    // it straight). Without this clause, a hiring_signal the filter stage just marked 'excluded'
+    // would still get enriched via the script even though the queue path correctly blocks it —
+    // confirmed and closed as part of wiring the filter stage's exclusion rule.
+    listWithoutContact: async (): Promise<HiringSignalRow[]> => {
+      const { data: contactRows, error: contactsError } = await db
+        .from("contacts")
+        .select("hiring_signal_id")
+        .not("hiring_signal_id", "is", null);
+      if (contactsError) throw contactsError;
+      const enrichedHiringSignalIds = [...new Set((contactRows ?? []).map((row) => row.hiring_signal_id as string))];
+
+      let query = db.from("hiring_signals").select("*").eq("status", "active");
+      if (enrichedHiringSignalIds.length > 0) {
+        query = query.not("id", "in", `(${enrichedHiringSignalIds.join(",")})`);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+
+    // Day 6 early filter, extended for the internal-mobility exclusion rule: reason is written
+    // alongside status so a decision like 'excluded' is auditable, not a bare status flip.
+    setStatus: async (id: string, status: HiringSignalStatus, reason?: string | null): Promise<void> => {
+      const { error } = await db
+        .from("hiring_signals")
+        .update({ status, status_reason: reason ?? null })
+        .eq("id", id);
       if (error) throw error;
     },
 
