@@ -9,6 +9,14 @@ export function leadRepository(db: SupabaseClient) {
       return data;
     },
 
+    // Day 10 emit: leads are global, so the same hiring_signal reaching two eligible tenants
+    // must reuse this one row rather than creating a duplicate.
+    findByHiringSignalId: async (hiringSignalId: string): Promise<LeadRow | null> => {
+      const { data, error } = await db.from("leads").select("*").eq("hiring_signal_id", hiringSignalId).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+
     // Day 10 emit: write the finished global lead. why_now/pitch_angle/etc. stay null in the
     // base phase — a hardcoded placeholder stands in for generated intelligence.
     create: async (input: {

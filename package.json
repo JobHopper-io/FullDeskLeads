@@ -12,7 +12,8 @@
     "pipeline:once": "tsx --env-file=.env scripts/run-pipeline-once.ts",
     "enqueue-test-job": "tsx --env-file=.env scripts/enqueue-test-job.ts",
     "ingest": "tsx --env-file=.env scripts/run-ingest.ts",
-    "enrich": "tsx --env-file=.env scripts/run-enrichment.ts"
+    "enrich": "tsx --env-file=.env scripts/run-enrichment.ts",
+    "score-and-emit": "tsx --env-file=.env scripts/run-scoring-and-emission.ts"
   },
   "dependencies": {
     "@fdl/contracts": "workspace:*",

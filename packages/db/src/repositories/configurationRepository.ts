@@ -4,7 +4,7 @@ import type { ConfigurationRow } from "../types.js";
 export function configurationRepository(db: SupabaseClient) {
   return {
     // Day 9-10 scoring: the fit check reads the tenant's active configuration row.
-    findActiveForTenant: async (tenantId: string): Promise<ConfigurationRow | null> => {
+    getActiveForTenant: async (tenantId: string): Promise<ConfigurationRow | null> => {
       const { data, error } = await db
         .from("configurations")
         .select("*")

@@ -156,11 +156,13 @@ export interface ExclusionRow {
 export interface ScoreRecordRow {
   id: string;
   tenant_id: string;
-  lead_id: string;
+  lead_id: string | null;
+  hiring_signal_id: string | null;
   fit_score: number | null;
   freshness_score: number | null;
   confidence_score: number | null;
   priority_score: number | null;
+  eligible: boolean;
   computed_at: string;
 }
 

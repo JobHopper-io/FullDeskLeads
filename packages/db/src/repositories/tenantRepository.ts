@@ -9,6 +9,14 @@ export function tenantRepository(db: SupabaseClient) {
       return data;
     },
 
+    // Day 9 score worker: score every hiring_signal against every real tenant, not a
+    // hardcoded pair of ids.
+    listAll: async (): Promise<TenantRow[]> => {
+      const { data, error } = await db.from("tenants").select("*");
+      if (error) throw error;
+      return data;
+    },
+
     // Day 2 seed script.
     create: async (input: { name: string; plan?: TenantPlan; status?: TenantStatus }): Promise<TenantRow> => {
       const { data, error } = await db.from("tenants").insert(input).select().single();

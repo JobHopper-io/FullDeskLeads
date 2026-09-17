@@ -37,6 +37,17 @@ export function contactRepository(db: SupabaseClient) {
       return data;
     },
 
+    // Day 9-10 scoring/emission: the one contact tied to this specific hiring_signal.
+    findByHiringSignalId: async (hiringSignalId: string): Promise<ContactRow | null> => {
+      const { data, error } = await db
+        .from("contacts")
+        .select("*")
+        .eq("hiring_signal_id", hiringSignalId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+
     // Day 8 select-contact (highest confidence first) and day 10 reachability gate
     // (caller filters for phone_verified) both read from this ordered candidate list.
     listByCompanyOrderedByConfidence: async (companyId: string): Promise<ContactRow[]> => {

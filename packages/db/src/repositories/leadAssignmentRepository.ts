@@ -8,9 +8,28 @@ export function leadAssignmentRepository(db: SupabaseClient) {
     create: async (input: { tenantId: string; leadId: string; seatId?: string | null }): Promise<LeadAssignmentRow> => {
       const { data, error } = await db
         .from("lead_assignments")
-        .insert({ tenant_id: input.tenantId, lead_id: input.leadId, seat_id: input.seatId ?? null })
+        .insert({
+          tenant_id: input.tenantId,
+          lead_id: input.leadId,
+          seat_id: input.seatId ?? null,
+          delivered_at: new Date().toISOString(),
+        })
         .select()
         .single();
+      if (error) throw error;
+      return data;
+    },
+
+    // Day 10 emit idempotency: the same (tenant_id, lead_id) pair must only ever get one
+    // assignment — checked explicitly rather than relying on the unique index throwing, since
+    // emitLead needs to distinguish "already assigned, reuse it" from a real error.
+    findByTenantAndLead: async (tenantId: string, leadId: string): Promise<LeadAssignmentRow | null> => {
+      const { data, error } = await db
+        .from("lead_assignments")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("lead_id", leadId)
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
