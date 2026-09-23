@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { createServiceClient } from "@fdl/db";
-import { loadEnv } from "@fdl/shared";
 import { requireSeat } from "../plugins/auth.plugin.js";
+import { service } from "../serviceDb.js";
 
 export interface QueueItem {
   id: string;
@@ -10,10 +9,23 @@ export interface QueueItem {
   company: string;
   roleTitle: string;
   location: string | null;
-  contact: { name: string; title: string; phone: string | null };
+  contact: { name: string; title: string; phone: string | null; email: string | null };
   freshnessBand: string | null;
-  confidenceScore: number | null;
   whyNow: string | null;
+  // Layer 2 detail. Provenance is deliberately restrained: no vendor names, internal scores or stage detail.
+  /** Lets the client mark every lead sharing this contact as flagged after one flag. */
+  contactId: string;
+  /** When this tenant flagged the contact as bad data; null = not flagged. */
+  contactFlaggedAt: string | null;
+  /** When the underlying job posting was first seen. */
+  signalFirstSeen: string;
+  /** 0–1 confidence in the primary contact, and when its phone was verified (null = not verified). */
+  contactConfidence: number;
+  phoneVerifiedAt: string | null;
+  openingScript: string | null;
+  /** Shapes undefined until intelligence generation exists (leads.role_intelligence / objections are jsonb). */
+  roleIntelligence: unknown;
+  objections: unknown;
   /** no_answer events already logged; the 4th expires the lead. */
   noAnswerAttempts: number;
   /** Empty today: nothing populates leads.alternate_contact_ids yet. */
@@ -32,15 +44,13 @@ interface LeadRow {
   id: string;
   why_now: string | null;
   alternate_contact_ids: string[];
-  hiring_signal: { role_title: string; location: string | null; freshness_band: string | null; company: { name: string } };
-  primary_contact: { name: string; title: string; phone: string | null };
+  primary_contact_id: string;
+  opening_script: string | null;
+  role_intelligence: unknown;
+  objections: unknown;
+  hiring_signal: { role_title: string; location: string | null; freshness_band: string | null; detected_at: string; company: { name: string } };
+  primary_contact: { name: string; title: string; phone: string | null; email: string | null; confidence_score: number; phone_verified: boolean; verified_at: string | null };
 }
-
-// The global tables (leads, contacts, hiring_signals, companies) return no rows to an authenticated
-// user in this database, so the joined data comes from the service client. It is only ever queried
-// by lead ids taken from the caller's own tenant-filtered assignments — never by anything from the request.
-let serviceDb: ReturnType<typeof createServiceClient> | undefined;
-const service = () => (serviceDb ??= createServiceClient(loadEnv()));
 
 export async function queueRoutes(app: FastifyInstance) {
   // Who am I — lets the web app hold the seat (tenant_id, role) without touching tables itself.
@@ -67,9 +77,9 @@ export async function queueRoutes(app: FastifyInstance) {
     const { data: leadData, error: leadError } = await service()
       .from("leads")
       .select(
-        `id, why_now, alternate_contact_ids,
-         hiring_signal:hiring_signals ( role_title, location, freshness_band, company:companies ( name ) ),
-         primary_contact:contacts!primary_contact_id ( name, title, phone )`,
+        `id, why_now, alternate_contact_ids, primary_contact_id, opening_script, role_intelligence, objections,
+         hiring_signal:hiring_signals ( role_title, location, freshness_band, detected_at, company:companies ( name ) ),
+         primary_contact:contacts!primary_contact_id ( name, title, phone, email, confidence_score, phone_verified, verified_at )`,
       )
       .in("id", leadIds);
     if (leadError) throw leadError;
@@ -92,6 +102,14 @@ export async function queueRoutes(app: FastifyInstance) {
     const attempts = new Map<string, number>();
     for (const r of attemptRows as { lead_assignment_id: string }[]) attempts.set(r.lead_assignment_id, (attempts.get(r.lead_assignment_id) ?? 0) + 1);
 
+    const { data: flagRows, error: flagError } = await request.db
+      .from("contact_flags")
+      .select("contact_id, created_at")
+      .eq("tenant_id", tenantId)
+      .in("contact_id", [...leadsById.values()].map((l) => l.primary_contact_id));
+    if (flagError) throw flagError;
+    const flaggedAt = new Map((flagRows as { contact_id: string; created_at: string }[]).map((f) => [f.contact_id, f.created_at]));
+
     const { data: scores, error: scoreError } = await request.db
       .from("score_records")
       .select("lead_id, confidence_score")
@@ -100,7 +118,10 @@ export async function queueRoutes(app: FastifyInstance) {
     if (scoreError) throw scoreError;
     const confidenceByLead = new Map((scores as { lead_id: string; confidence_score: number | null }[]).map((s) => [s.lead_id, s.confidence_score]));
 
-    return assignments
+    // Ordered by the tenant's score_record confidence (best first, then newest), which is not sent to the client.
+    const scoreOf = (a: AssignmentRow) => confidenceByLead.get(a.lead_id) ?? -1;
+    return [...assignments]
+      .sort((x, y) => scoreOf(y) - scoreOf(x) || (y.delivered_at ?? "").localeCompare(x.delivered_at ?? ""))
       .map((a): QueueItem => {
         const lead = leadsById.get(a.lead_id)!;
         return {
@@ -110,14 +131,20 @@ export async function queueRoutes(app: FastifyInstance) {
           company: lead.hiring_signal.company.name,
           roleTitle: lead.hiring_signal.role_title,
           location: lead.hiring_signal.location,
-          contact: lead.primary_contact,
+          contact: { name: lead.primary_contact.name, title: lead.primary_contact.title, phone: lead.primary_contact.phone, email: lead.primary_contact.email },
+          contactId: lead.primary_contact_id,
+          contactFlaggedAt: flaggedAt.get(lead.primary_contact_id) ?? null,
+          signalFirstSeen: lead.hiring_signal.detected_at,
+          contactConfidence: lead.primary_contact.confidence_score,
+          phoneVerifiedAt: lead.primary_contact.phone_verified ? lead.primary_contact.verified_at : null,
+          openingScript: lead.opening_script,
+          roleIntelligence: lead.role_intelligence,
+          objections: lead.objections,
           freshnessBand: lead.hiring_signal.freshness_band,
-          confidenceScore: confidenceByLead.get(a.lead_id) ?? null,
           whyNow: lead.why_now,
           noAnswerAttempts: attempts.get(a.id) ?? 0,
           alternateContacts: lead.alternate_contact_ids.flatMap((id) => contactsById.get(id) ?? []),
         };
-      })
-      .sort((x, y) => (y.confidenceScore ?? -1) - (x.confidenceScore ?? -1) || (y.deliveredAt ?? "").localeCompare(x.deliveredAt ?? ""));
+      });
   });
 }

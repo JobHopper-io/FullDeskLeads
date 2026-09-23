@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { createServiceClient } from "@fdl/db";
-import { loadEnv } from "@fdl/shared";
 import { requireSeat } from "../plugins/auth.plugin.js";
+import { service } from "../serviceDb.js";
 
 const DISPOSITIONS = [
   "no_answer", "left_voicemail", "gatekeeper", "connected", "no_interest", "follow_up_later",
@@ -20,11 +19,6 @@ interface Body {
   /** Caller's IANA time zone; defines Saturday/Sunday and "9:00" for the weekend roll. */
   timeZone?: string;
 }
-
-// Global tables aren't readable with the user's JWT; the ids below are only ever looked up from an
-// assignment the caller's tenant-filtered query already returned.
-let serviceDb: ReturnType<typeof createServiceClient> | undefined;
-const service = () => (serviceDb ??= createServiceClient(loadEnv()));
 
 export async function outcomesRoutes(app: FastifyInstance) {
   app.post<{ Body: Body }>(
