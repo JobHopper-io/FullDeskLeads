@@ -15,12 +15,28 @@ const log = createLogger("filter");
  * "international". \bintern\b still correctly catches a real title like "International Sales
  * Intern" (the standalone word "Intern" at the end), it just won't false-positive on
  * "International" or "Internal" alone, where "intern" isn't a distinct word.
+ *
+ * Same category of non-lead content: generic interest-list postings that aren't a specific
+ * requisition ("San Antonio Talent Community", "General Application", "Candidate Pool"). Word-boundary matched on the
+ * whole phrase so real roles that merely contain a word don't match — "General Foreman",
+ * "HR Generalist" and "Talent Acquisition Partner" are all real titles and stay in.
+ *
+ * These are also anchored to the whole title: the phrase, with at most a short location prefix
+ * ("San Antonio Talent Community") or a separator-led suffix ("Talent Network - Houston",
+ * "Candidate Pool (Austin, TX)"). A longer, otherwise-real title that merely contains the phrase
+ * ("Talent Community Manager", "Talent Network Manager") is not a match.
  */
+const genericInterestList = (phrase: string) =>
+  new RegExp(String.raw`^(?:[\p{L}\p{N}.'&]+ ){0,3}${phrase}(?:\s*(?:[-–—,|:]\s*\S.*|\(.*\)))?$`, "iu");
+
 const INTERNAL_MOBILITY_PATTERNS: { reason: string; pattern: RegExp }[] = [
   { reason: "transfer-portal", pattern: /transfer portal/i },
   { reason: "job-shadowing", pattern: /job shadowing/i },
   { reason: "internship", pattern: /internship/i },
   { reason: "intern", pattern: /\bintern\b/i },
+  { reason: "talent-community", pattern: genericInterestList("talent (?:community|network)") },
+  { reason: "candidate-pool", pattern: genericInterestList("candidate pool") },
+  { reason: "general-application", pattern: genericInterestList("general applications?") },
 ];
 
 /** Read-only classifier: which pattern (if any) matches, with no DB write. */
