@@ -1,4 +1,5 @@
 import type { QueueItem } from "../lib/types";
+import { confidenceLabel } from "../lib/provenance";
 import StateTag from "./StateTag";
 
 interface Props {
@@ -15,7 +16,10 @@ export default function QueueList({ items, selectedId, onSelect }: Props) {
           <button className={`queue-row ${item.state}`} aria-current={item.id === selectedId} onClick={() => onSelect(item.id)}>
             <span className="top">
               <span className="company">{item.company}</span>
-              {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
+              <span className="tags">
+                {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
+                <StateTag state={item.state} />
+              </span>
             </span>
             <span className="meta">
               {item.roleTitle}
@@ -24,8 +28,7 @@ export default function QueueList({ items, selectedId, onSelect }: Props) {
             <span className="foot">
               <span>{item.contact.name}</span>
               <span>{item.contact.phone ?? "no phone"}</span>
-              <span>{item.confidenceScore !== null ? `confidence ${item.confidenceScore.toFixed(2)}` : "no score"}</span>
-              <StateTag state={item.state} />
+              <span>Confidence: {confidenceLabel(item.contactConfidence)}</span>
             </span>
           </button>
         </li>

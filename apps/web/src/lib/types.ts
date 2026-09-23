@@ -12,10 +12,18 @@ export interface QueueItem {
   company: string;
   roleTitle: string;
   location: string | null;
-  contact: { name: string; title: string; phone: string | null };
+  contact: { name: string; title: string; phone: string | null; email: string | null };
   freshnessBand: string | null;
-  confidenceScore: number | null;
   whyNow: string | null;
+  // Layer 2 detail (see apps/api's QueueItem).
+  contactId: string;
+  contactFlaggedAt: string | null;
+  signalFirstSeen: string;
+  contactConfidence: number;
+  phoneVerifiedAt: string | null;
+  openingScript: string | null;
+  roleIntelligence: unknown;
+  objections: unknown;
   noAnswerAttempts: number;
   alternateContacts: { name: string; title: string; phone: string | null }[];
 }

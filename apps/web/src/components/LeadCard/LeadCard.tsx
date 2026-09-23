@@ -1,29 +1,30 @@
-import { useState } from "react";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
-import OutcomeSheet from "../OutcomeSheet";
+import LogOutcome from "../LogOutcome";
 import LeadCardLayer1 from "./LeadCardLayer1";
+import type { DetailSection } from "../LeadDetail/LeadDetail";
 
 interface Props {
   item: QueueItem;
   onLogged: (event: InteractionEvent) => void;
+  onExpand: (section: DetailSection) => void;
 }
 
-export default function LeadCard({ item, onLogged }: Props) {
-  const [open, setOpen] = useState(false);
+const EXPANDERS: { section: DetailSection; label: string }[] = [
+  { section: "script", label: "Full script" },
+  { section: "objections", label: "Objection handling" },
+  { section: "role", label: "Role detail" },
+];
+
+export default function LeadCard({ item, onLogged, onExpand }: Props) {
   return (
     <article className="lead-card">
       <LeadCardLayer1 item={item} />
-      <button className="outcome-button" onClick={() => setOpen(true)}>Log outcome</button>
-      {open && (
-        <OutcomeSheet
-          item={item}
-          onClose={() => setOpen(false)}
-          onLogged={(event) => {
-            setOpen(false);
-            onLogged(event);
-          }}
-        />
-      )}
+      <div className="card-actions">
+        <LogOutcome item={item} onLogged={onLogged} />
+        {EXPANDERS.map((e) => (
+          <button key={e.section} className="chip" onClick={() => onExpand(e.section)}>{e.label}</button>
+        ))}
+      </div>
     </article>
   );
 }
