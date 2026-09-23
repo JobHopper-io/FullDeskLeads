@@ -1,5 +1,12 @@
 import { createLogger } from "@fdl/shared";
-import { contactRepository, leadAssignmentRepository, leadRepository, scoreRecordRepository } from "@fdl/db";
+import {
+  contactRepository,
+  exclusionRepository,
+  hiringSignalRepository,
+  leadAssignmentRepository,
+  leadRepository,
+  scoreRecordRepository,
+} from "@fdl/db";
 import { CONTRACT_VERSION } from "@fdl/contracts";
 import { getDb } from "../db.js";
 
@@ -48,6 +55,20 @@ export async function emitLead(
 
   let leadAssignment = await leadAssignments.findByTenantAndLead(tenantId, lead.id);
   if (!leadAssignment) {
+    // The lead stays global; only this tenant's assignment is blocked. Expected behavior, not an error:
+    // any active exclusion (do_not_contact, client, house_account, competitor, previously_rejected)
+    // for this tenant + company means the tenant never gets a new assignment there.
+    const hiringSignal = await hiringSignalRepository(db).findById(hiringSignalId);
+    if (!hiringSignal) throw new Error(`hiring_signal ${hiringSignalId} not found`);
+    const exclusion = await exclusionRepository(db).findActive(tenantId, hiringSignal.company_id);
+    if (exclusion) {
+      log.info(
+        { hiringSignalId, tenantId, leadId: lead.id, companyId: hiringSignal.company_id, exclusionType: exclusion.exclusion_type },
+        `lead_assignment blocked by tenant exclusion (${exclusion.exclusion_type}) — lead stays global, not assigned to this tenant`,
+      );
+      return { skipped: true, reason: `excluded: ${exclusion.exclusion_type}` };
+    }
+
     leadAssignment = await leadAssignments.create({ tenantId, leadId: lead.id });
     log.info({ hiringSignalId, tenantId, leadId: lead.id, leadAssignmentId: leadAssignment.id }, "created lead_assignment");
   } else {
