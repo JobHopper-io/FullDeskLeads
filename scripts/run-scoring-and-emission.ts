@@ -5,6 +5,9 @@ import { loadEnv, createLogger } from "@fdl/shared";
 // Direct-call debugging path, same idea as scripts/run-enrichment.ts: bypasses BullMQ/Redis and
 // calls scoreHiringSignal + emitLead for every hiring_signal that has a linked contact and
 // doesn't yet have a score_record for a given tenant, against every real tenant.
+// `--rescore-ineligible` also re-scores signals whose existing score_record is not eligible (after a
+// scoring-rule fix). scoreRecordRepository upserts, so this updates them in place; no Seamless calls.
+const rescoreIneligible = process.argv.includes("--rescore-ineligible");
 const log = createLogger("run-scoring-and-emission");
 const db = createServiceClient(loadEnv());
 
@@ -30,7 +33,8 @@ for (const tenant of tenants) {
     .from("score_records")
     .select("hiring_signal_id")
     .eq("tenant_id", tenant.id)
-    .not("hiring_signal_id", "is", null);
+    .not("hiring_signal_id", "is", null)
+    .in("eligible", rescoreIneligible ? [true] : [true, false]);
   if (scoredErr) throw scoredErr;
   const alreadyScoredIds = new Set(alreadyScored.map((r) => r.hiring_signal_id as string));
 

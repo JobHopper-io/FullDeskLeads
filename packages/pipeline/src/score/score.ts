@@ -8,6 +8,7 @@ import {
 } from "@fdl/db";
 import type { HiringSignalFreshnessBand } from "@fdl/db";
 import { getDb } from "../db.js";
+import { locationMatchesTarget } from "./geography.js";
 
 const log = createLogger("score");
 
@@ -45,7 +46,7 @@ function computeFitScore(
   targetGeographies: string[],
 ): { fitScore: number; geographyMatch: boolean } {
   const geographyMatch =
-    location !== null && targetGeographies.some((target) => location.toLowerCase().includes(target.toLowerCase()));
+    location !== null && targetGeographies.some((target) => locationMatchesTarget(location, target));
   return { fitScore: geographyMatch ? 1 : 0, geographyMatch };
 }
 
