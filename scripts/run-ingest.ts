@@ -8,7 +8,7 @@ import { loadEnv, createLogger } from "@fdl/shared";
 // source — e.g. `tsx scripts/run-ingest.ts greenhouse` or `tsx scripts/run-ingest.ts lever`.
 const sourceName = process.argv[2];
 if (!sourceName) {
-  console.error("Usage: tsx scripts/run-ingest.ts <source>  (e.g. greenhouse, lever)");
+  console.error("Usage: tsx scripts/run-ingest.ts <source> [source_token...]  (e.g. greenhouse, lever)");
   process.exit(1);
 }
 getSource(sourceName); // fails fast with a clear error if this source isn't registered
@@ -16,7 +16,11 @@ getSource(sourceName); // fails fast with a clear error if this source isn't reg
 const log = createLogger(`run-ingest:${sourceName}`);
 const db = createServiceClient(loadEnv());
 
-const sourceCompanies = await sourceCompanyRepository(db).listActiveBySource(sourceName);
+// Optional extra args restrict the run to those source_tokens, e.g. `run-ingest.ts greenhouse tokA tokB`.
+const onlyTokens = process.argv.slice(3);
+const sourceCompanies = (await sourceCompanyRepository(db).listActiveBySource(sourceName)).filter(
+  (c) => onlyTokens.length === 0 || onlyTokens.includes(c.source_token),
+);
 
 let companiesProcessed = 0;
 let postingsInserted = 0;

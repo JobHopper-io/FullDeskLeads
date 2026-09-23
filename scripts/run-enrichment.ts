@@ -12,7 +12,16 @@ const arg = process.argv[2];
 const log = createLogger("run-enrichment");
 const db = createServiceClient(loadEnv());
 
-const pending = await hiringSignalRepository(db).listWithoutContact();
+let pending = await hiringSignalRepository(db).listWithoutContact();
+
+// Optional scope: `--domains=a.com,b.com` restricts the run to those companies (matched on companies.domain).
+const domainsArg = process.argv.find((a) => a.startsWith("--domains="));
+if (domainsArg) {
+  const wanted = new Set(domainsArg.slice("--domains=".length).split(",").map((d) => d.toLowerCase()));
+  const { data: companies } = await db.from("companies").select("id,domain");
+  const ids = new Set((companies ?? []).filter((c) => c.domain && wanted.has(c.domain.toLowerCase())).map((c) => c.id));
+  pending = pending.filter((s) => ids.has(s.company_id));
+}
 
 if (!arg) {
   console.error(`
@@ -21,6 +30,7 @@ ${pending.length} hiring_signal(s) have no contact yet — each one spends real 
 Usage:
   tsx scripts/run-enrichment.ts <limit>   run against the first <limit> signals
   tsx scripts/run-enrichment.ts all       run against all ${pending.length}
+  add --domains=a.com,b.com to restrict either form to those companies
 `);
   process.exit(1);
 }
