@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "../lib/apiClient";
-import type { InteractionEvent, QueueItem } from "../lib/types";
+import { DISPOSITIONS } from "../lib/outcomes";
+import type { QueueItem } from "../lib/types";
 import QueueList from "../components/QueueList";
 import LeadCard from "../components/LeadCard/LeadCard";
 
@@ -8,8 +9,7 @@ export default function QueuePage() {
   const [items, setItems] = useState<QueueItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Outcomes logged this session, by assignment id — the queue endpoint doesn't return events.
-  const [logged, setLogged] = useState<Record<string, InteractionEvent>>({});
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<QueueItem[]>("/queue").then(
@@ -30,13 +30,30 @@ export default function QueuePage() {
   return (
     <div className="queue-layout">
       <QueueList items={items} selectedId={selectedId} onSelect={setSelectedId} />
-      {selected && (
-        <LeadCard
-          item={selected}
-          logged={logged[selected.id] ?? null}
-          onLogged={(event) => setLogged((prev) => ({ ...prev, [selected.id]: event }))}
-        />
-      )}
+      <div>
+        {notice && <p className="outcome-logged">{notice}</p>}
+        {selected && (
+          <LeadCard
+            item={selected}
+            onLogged={(event) => {
+              const label = DISPOSITIONS.find((d) => d.value === event.disposition)?.label ?? event.disposition;
+              setNotice(
+                `Logged “${label}” for ${selected.company}.` +
+                  (event.state === "expired" ? " Out of attempts, lead expired." : event.state === "suppressed" ? " Lead suppressed." : ""),
+              );
+              // A follow-up in the future takes the lead out of the queue until it's due (/queue does the same).
+              const hidden = !!event.follow_up_at && (event.state === "contacted" || event.state === "viewed" || event.state === "new");
+              const rest = items.filter((i) => i.id !== selected.id);
+              if (hidden) {
+                setItems(rest);
+                setSelectedId(rest[0]?.id ?? null);
+              } else {
+                setItems(items.map((i) => (i.id === selected.id ? { ...i, state: event.state, noAnswerAttempts: i.noAnswerAttempts + (event.disposition === "no_answer" ? 1 : 0) } : i)));
+              }
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

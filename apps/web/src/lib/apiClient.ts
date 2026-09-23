@@ -13,7 +13,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const msg = ((await res.json().catch(() => null)) as { error?: string } | null)?.error;
+    throw new Error(msg ?? `${method} ${path} failed: ${res.status}`);
+  }
   return res.json() as Promise<T>;
 }
 

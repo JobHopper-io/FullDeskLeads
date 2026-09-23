@@ -36,6 +36,12 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; }
 .queue-row .meta { font-size: 0.8125rem; color: var(--color-muted); }
 .queue-row .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 0.75rem; color: var(--color-muted); }
 
+.state-tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  background: var(--color-line); color: var(--color-muted); }
+.state-tag.new { background: var(--color-primary); color: var(--color-background); }
+.state-tag.contacted { background: var(--color-primary-tint); color: var(--color-primary); }
+.queue-row.contacted { background: var(--color-primary-tint); }
+
 .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 500;
   background: var(--color-primary-tint); color: var(--color-primary); text-transform: capitalize; }
 .tag.stale, .tag.ageing { background: var(--color-line); color: var(--color-muted); }
@@ -63,3 +69,18 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; }
 .login label { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--color-muted); }
 .login input { font: inherit; padding: 10px 12px; border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-background); color: var(--color-text); }
 .empty { color: var(--color-muted); padding: 24px; }
+
+/* Outcome sheet — a bottom sheet over a dimmed backdrop, so the lead card (phone number first) stays visible above it. */
+.sheet-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
+.sheet { background: var(--color-surface); border-radius: 14px 14px 0 0; width: 100%; max-width: 640px; max-height: 65vh; overflow-y: auto; padding: 20px 24px 24px; display: grid; gap: 14px; }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.sheet .link-button { color: var(--color-muted); }
+.disposition-grid, .shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { background: var(--color-background); color: var(--color-text); border: 1px solid var(--color-line); border-radius: 999px; padding: 6px 14px; font-size: 0.8125rem; }
+.chip:hover { border-color: var(--color-primary); }
+.chip[aria-checked="true"] { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-background); }
+.sheet-hint { margin: 0; font-size: 0.8125rem; color: var(--color-muted); }
+.sheet-confirm { margin: 0; font-size: 0.875rem; font-weight: 600; color: var(--color-primary); }
+.sheet-alternates { display: grid; gap: 4px; font-size: 0.8125rem; padding: 10px 12px; border-radius: 8px; background: var(--color-primary-tint); color: var(--color-primary); }
+.sheet-field { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--color-muted); }
+.sheet-field input, .sheet-field select { font: inherit; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-background); color: var(--color-text); }

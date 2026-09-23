@@ -1,18 +1,29 @@
+import { useState } from "react";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
-import OutcomeButton from "../OutcomeButton";
+import OutcomeSheet from "../OutcomeSheet";
 import LeadCardLayer1 from "./LeadCardLayer1";
 
 interface Props {
   item: QueueItem;
-  logged: InteractionEvent | null;
   onLogged: (event: InteractionEvent) => void;
 }
 
-export default function LeadCard({ item, logged, onLogged }: Props) {
+export default function LeadCard({ item, onLogged }: Props) {
+  const [open, setOpen] = useState(false);
   return (
     <article className="lead-card">
       <LeadCardLayer1 item={item} />
-      <OutcomeButton leadAssignmentId={item.id} logged={logged} onLogged={onLogged} />
+      <button className="outcome-button" onClick={() => setOpen(true)}>Log outcome</button>
+      {open && (
+        <OutcomeSheet
+          item={item}
+          onClose={() => setOpen(false)}
+          onLogged={(event) => {
+            setOpen(false);
+            onLogged(event);
+          }}
+        />
+      )}
     </article>
   );
 }

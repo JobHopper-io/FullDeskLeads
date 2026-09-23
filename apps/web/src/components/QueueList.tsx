@@ -1,4 +1,5 @@
 import type { QueueItem } from "../lib/types";
+import StateTag from "./StateTag";
 
 interface Props {
   items: QueueItem[];
@@ -11,7 +12,7 @@ export default function QueueList({ items, selectedId, onSelect }: Props) {
     <ul className="queue-list">
       {items.map((item) => (
         <li key={item.id}>
-          <button className="queue-row" aria-current={item.id === selectedId} onClick={() => onSelect(item.id)}>
+          <button className={`queue-row ${item.state}`} aria-current={item.id === selectedId} onClick={() => onSelect(item.id)}>
             <span className="top">
               <span className="company">{item.company}</span>
               {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
@@ -24,7 +25,7 @@ export default function QueueList({ items, selectedId, onSelect }: Props) {
               <span>{item.contact.name}</span>
               <span>{item.contact.phone ?? "no phone"}</span>
               <span>{item.confidenceScore !== null ? `confidence ${item.confidenceScore.toFixed(2)}` : "no score"}</span>
-              <span>{item.state}</span>
+              <StateTag state={item.state} />
             </span>
           </button>
         </li>
