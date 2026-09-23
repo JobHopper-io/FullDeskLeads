@@ -3,10 +3,26 @@ export const COMPANY_NAME_SIMILARITY_THRESHOLD = 0.65;
 
 const LEGAL_SUFFIXES = new Set(["inc", "llc", "corp", "corporation", "co", "company", "ltd", "limited"]);
 
-// Same normalization as normalize.ts's normalizeCompanyName (comparison only). Duplicated rather
-// than imported because @fdl/pipeline depends on this package.
+// Whole-word abbreviation expansions, applied before the legal-suffix strip. Kept to real cases
+// (Mfg vs Manufacturing scored 0.556 and falsely rejected Industrial Electric Mfg.); grow it only
+// when a real case shows the need, same as LEGAL_SUFFIXES.
+const ABBREVIATIONS: Record<string, string> = {
+  mfg: "manufacturing",
+  corp: "corporation",
+  co: "company",
+  bros: "brothers",
+};
+
+// Same normalization as normalize.ts's normalizeCompanyName (comparison only) plus the abbreviation
+// expansion above. Duplicated rather than imported because @fdl/pipeline depends on this package.
 function normalizeCompanyName(name: string): string {
-  const words = name.trim().toLowerCase().replace(/[.,]/g, "").split(/\s+/).filter(Boolean);
+  const words = name
+    .trim()
+    .toLowerCase()
+    .replace(/[.,]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => ABBREVIATIONS[word] ?? word);
   if (words.length > 1 && LEGAL_SUFFIXES.has(words[words.length - 1])) words.pop();
   return words.join(" ");
 }
