@@ -46,6 +46,8 @@ export function hiringSignalRepository(db: SupabaseClient) {
     // a freshness window + fuzzy title similarity (via the find_similar_hiring_signal SQL
     // function, packages/db/migrations/0010) instead of the (company_id, source,
     // source_posting_id) unique index, which only ever collapses one source's own re-fetch.
+    // Only hiring_signals from *other* sources are candidates (migration 0020): same-source postings
+    // with distinct source_posting_ids are separate requisitions, never fuzzy-matched.
     // Returns every candidate in scope with its similarity score and location, unfiltered — the
     // caller decides (and logs) the threshold and location match, so every comparison is
     // visible, not just the ones that end up flagged as duplicates.
@@ -53,11 +55,13 @@ export function hiringSignalRepository(db: SupabaseClient) {
       companyId: string,
       roleTitle: string,
       detectedSince: string,
+      source: string,
     ): Promise<{ hiringSignalId: string; roleTitle: string; location: string | null; similarityScore: number }[]> => {
       const { data, error } = await db.rpc("find_similar_hiring_signal", {
         p_company_id: companyId,
         p_role_title: roleTitle,
         p_detected_since: detectedSince,
+        p_source: source,
       });
       if (error) throw error;
       return (data ?? []).map(

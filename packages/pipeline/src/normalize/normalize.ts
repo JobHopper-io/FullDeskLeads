@@ -80,9 +80,13 @@ function computeFreshnessBand(referenceDate: Date, now: Date): HiringSignalFresh
  * less reliable and should be visible, not silent.
  *
  * Dedup: the (company_id, source, source_posting_id) unique index in the DB already collapses
- * the *same* source re-posting the *same* job. This check is for the same real-world job
- * appearing under a *different* posting id — same company, detected recently, similar-enough
- * title, AND the same location. Uses pg_trgm similarity (via find_similar_hiring_signal, see
+ * the *same* source re-posting the *same* job. This fuzzy check is for the same real-world job
+ * appearing on a *different source* — same company, detected recently, similar-enough
+ * title, AND the same location. Same-source postings are never fuzzy-matched (migration 0020):
+ * distinct source_posting_ids are distinct requisitions, and levels/seniority/shifts/regions of
+ * one role ("Field Service Technician Level I/II/III") score as similar titles but are separate
+ * openings — confirmed: 11 of 13 same-source collapses at Industrial Electric Manufacturing were
+ * false merges. Uses pg_trgm similarity (via find_similar_hiring_signal, see
  * migration 0010) rather than exact title matching, since two sources rarely word the same role
  * identically — but title similarity alone isn't enough: the same title text posted in two
  * different real cities are two different real openings, not one (confirmed false positive:
@@ -148,7 +152,12 @@ export async function normalizeRawSignal(
   }
 
   const detectedSince = new Date(Date.now() - DEDUP_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const candidates = await hiringSignals.findSimilarHiringSignals(companyId, posting.title, detectedSince);
+  const candidates = await hiringSignals.findSimilarHiringSignals(
+    companyId,
+    posting.title,
+    detectedSince,
+    rawSignal.source,
+  );
   const incomingLocation = normalizeLocationForComparison(posting.location);
 
   // Log every comparison, not just the ones that end up flagged as duplicates — this is how a
