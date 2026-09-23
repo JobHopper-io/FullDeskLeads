@@ -77,6 +77,8 @@ export interface PollResult {
   status: SeamlessResearchStatus;
   message?: string;
   contact?: SeamlessContact;
+  // Shape unconfirmed until the first real company poll lands — kept raw on purpose.
+  company?: Record<string, unknown>;
   searchResultId?: string;
   // Only observed populated on a "duplicate" result — points at the original request that's
   // already in progress or done, which is what enrich.ts's duplicate-recovery follows.
@@ -163,10 +165,29 @@ export class SeamlessClient {
     return result.requestIds ?? [];
   }
 
-  /** GET /contacts/research/poll. */
-  async pollResearch(requestIds: string[]): Promise<PollResult[]> {
+  /** POST /search/companies. Returns the raw rows (shape unconfirmed) — every row has a searchResultId. */
+  async searchCompanies(domain: string): Promise<({ searchResultId: string } & Record<string, unknown>)[]> {
+    const result = await this.request<{ data: ({ searchResultId: string } & Record<string, unknown>)[] }>(
+      "/search/companies",
+      { method: "POST", body: JSON.stringify({ companyDomain: [domain], limit: 5 }) },
+    );
+    return result.data ?? [];
+  }
+
+  /** POST /companies/research. Consumes credits per id submitted — logged here so spend is visible. */
+  async researchCompanies(searchResultIds: string[]): Promise<string[]> {
+    log.info({ count: searchResultIds.length }, "submitting Seamless company research request");
+    const result = await this.request<{ requestIds: string[] }>("/companies/research", {
+      method: "POST",
+      body: JSON.stringify({ searchResultIds }),
+    });
+    return result.requestIds ?? [];
+  }
+
+  /** GET /{contacts|companies}/research/poll. */
+  async pollResearch(requestIds: string[], kind: "contacts" | "companies" = "contacts"): Promise<PollResult[]> {
     const query = requestIds.map(encodeURIComponent).join(",");
-    const result = await this.request<{ data: PollResult[] }>(`/contacts/research/poll?requestIds=${query}`);
+    const result = await this.request<{ data: PollResult[] }>(`/${kind}/research/poll?requestIds=${query}`);
     return result.data ?? [];
   }
 
@@ -177,7 +198,7 @@ export class SeamlessClient {
    */
   async pollUntilDone(
     requestIds: string[],
-    options: { maxAttempts?: number; intervalMs?: number } = {},
+    options: { maxAttempts?: number; intervalMs?: number; kind?: "contacts" | "companies" } = {},
   ): Promise<PollResult[]> {
     const maxAttempts = options.maxAttempts ?? DEFAULT_POLL_MAX_ATTEMPTS;
     const intervalMs = options.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
@@ -187,7 +208,7 @@ export class SeamlessClient {
 
     for (let attempt = 0; attempt < maxAttempts && pending.length > 0; attempt++) {
       if (attempt > 0) await sleep(intervalMs);
-      const polled = await this.pollResearch(pending);
+      const polled = await this.pollResearch(pending, options.kind);
       for (const result of polled) results.set(result.requestId, result);
       pending = pending.filter((id) => {
         const status = results.get(id)?.status;

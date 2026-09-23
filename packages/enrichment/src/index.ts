@@ -3,3 +3,4 @@ export * from "./seamless/SeamlessProvider.js";
 export * from "./seamless/SeamlessClient.js";
 export * from "./apollo/ApolloProvider.js";
 export * from "./waterfall.js";
+export * from "./seamless/verifyCompanyEntity.js";
