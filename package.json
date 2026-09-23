@@ -4,6 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@11.5.2",
   "scripts": {
+    "dev": "pnpm --parallel --filter @fdl/api --filter @fdl/web dev",
     "dev:api": "pnpm --filter @fdl/api dev",
     "dev:workers": "pnpm --filter @fdl/workers dev",
     "dev:web": "pnpm --filter @fdl/web dev",
