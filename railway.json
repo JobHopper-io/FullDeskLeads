@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "pnpm --filter \"@fdl/api...\" build"
+  },
+  "deploy": {
+    "startCommand": "node apps/api/dist/server.js",
+    "healthcheckPath": "/health",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
