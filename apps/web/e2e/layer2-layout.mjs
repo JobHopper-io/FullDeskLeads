@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 // Layer 2 layout check against the real app + API. Needs `pnpm dev` running (web :5173, api :3000) and the
-// repo .env. Logs in as the seeded tenant-A user, then patches /api/queue responses in the browser only (no data
+// repo .env. Logs in as the seeded tenant-A user, then patches /api/leads responses in the browser only (no data
 // is changed) to inject the spec's long stress strings. Run from apps/web: node e2e/layer2-layout.mjs [screenshotDir]
 // Needs Chromium: npx playwright install chromium
 const env = Object.fromEntries(readFileSync("../../.env", "utf8").split("\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
@@ -29,10 +29,11 @@ async function run(label, patch, vp, section, buttonText) {
   const ctx = await browser.newContext({ viewport: vp });
   await ctx.addInitScript(([k, v]) => localStorage.setItem(k, v), [key, JSON.stringify(session)]);
   const page = await ctx.newPage();
-  await page.route("**/api/queue", async (route) => {
+  await page.route("**/api/leads", async (route) => {
     const res = await route.fetch();
     const rows = await res.json();
-    if (patch && rows[0]) Object.assign(rows[0], { company: patch.company, roleTitle: patch.roleTitle, contact: { ...rows[0].contact, name: patch.contactName, title: patch.contactTitle } });
+    // Every row, so whichever lead My Day puts on the card carries the stress strings.
+    if (patch) for (const r of rows) Object.assign(r, { company: patch.company, roleTitle: patch.roleTitle, contact: { ...r.contact, name: patch.contactName, title: patch.contactTitle } });
     await route.fulfill({ response: res, json: rows });
   });
   await page.goto("http://localhost:5173/");
@@ -65,6 +66,8 @@ async function run(label, patch, vp, section, buttonText) {
   if (patch) check(r.company === patch.company && r.role.startsWith(patch.roleTitle), "full company and role text rendered");
   await page.screenshot({ path: `${SP}/l2-${label}-${vp.width}.png`, fullPage: true });
   if (label === "real") console.log("  provenance:", r.facts.join(" | "), "\n  placeholders:", r.texts);
+  // StrictMode (dev) fires a second /api/leads that can still be in the route handler when the test finishes.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
   await ctx.close();
 }
 for (const vp of [{ width: 1440, height: 900 }, { width: 1100, height: 800 }, { width: 390, height: 800 }]) {

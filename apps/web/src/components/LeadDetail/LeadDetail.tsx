@@ -9,7 +9,8 @@ export type DetailSection = "script" | "role" | "objections";
 
 interface Props {
   item: QueueItem;
-  section: DetailSection;
+  /** Section to scroll to on open; none = top. */
+  section: DetailSection | null;
   onBack: () => void;
   onLogged: (event: InteractionEvent) => void;
   /** Called after a successful flag so the queue can mark every lead sharing this contact. */
@@ -36,7 +37,7 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
   useEffect(() => {
     const top = topRef.current;
     if (top) document.documentElement.style.setProperty("--l2-top", `${top.offsetHeight + 16}px`);
-    document.getElementById(section)?.scrollIntoView({ block: "start" });
+    if (section) document.getElementById(section)?.scrollIntoView({ block: "start" });
     return () => {
       document.documentElement.style.removeProperty("--l2-top");
     };
@@ -60,7 +61,7 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
     <div className="l2">
       <div className="l2-top" ref={topRef}>
         <div className="l2-top-row">
-          <button className="link-button" onClick={onBack}>← Back to queue</button>
+          <button className="link-button" onClick={onBack}>← Back</button>
           <LogOutcome item={item} onLogged={onLogged} />
         </div>
         <h2 className="l2-company">{item.company}</h2>

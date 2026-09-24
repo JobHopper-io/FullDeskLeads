@@ -11,6 +11,8 @@ interface Props {
   item: QueueItem;
   onClose: () => void;
   onLogged: (event: InteractionEvent) => void;
+  /** My Day says "Save and next": saving there moves straight on to the next lead. */
+  submitLabel?: string;
 }
 
 // "default" = the disposition's built-in date (no_answer: next business day); "skip" = no follow-up.
@@ -18,7 +20,7 @@ type Choice = Shortcut | "default" | "skip" | null;
 
 const INITIAL_CHOICE: Partial<Record<Disposition, Choice>> = { no_answer: "default", left_voicemail: "3d" };
 
-export default function OutcomeSheet({ item, onClose, onLogged }: Props) {
+export default function OutcomeSheet({ item, onClose, onLogged, submitLabel = "Save outcome" }: Props) {
   const [disposition, setDisposition] = useState<Disposition | null>(null);
   const [choice, setChoice] = useState<Choice>(null);
   const [custom, setCustom] = useState("");
@@ -170,7 +172,7 @@ export default function OutcomeSheet({ item, onClose, onLogged }: Props) {
         </label>
 
         {error && <span className="error">{error}</span>}
-        <button className="outcome-button" onClick={submit} disabled={!valid || busy}>{busy ? "Saving…" : "Save outcome"}</button>
+        <button className="outcome-button" onClick={submit} disabled={!valid || busy}>{busy ? "Saving…" : submitLabel}</button>
       </div>
     </div>
   );

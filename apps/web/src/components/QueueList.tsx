@@ -1,6 +1,7 @@
 import type { QueueItem } from "../lib/types";
 import { confidenceLabel } from "../lib/provenance";
 import StateTag from "./StateTag";
+import ContactGlyph from "./ContactGlyph";
 
 interface Props {
   items: QueueItem[];
@@ -22,11 +23,11 @@ export default function QueueList({ items, selectedId, onSelect }: Props) {
               </span>
             </span>
             <span className="meta">
-              {item.roleTitle}
+              Hiring: {item.roleTitle}
               {item.location ? ` · ${item.location}` : ""}
             </span>
             <span className="foot">
-              <span>{item.contact.name}</span>
+              <span className="contact"><ContactGlyph />{item.contact.name}</span>
               <span>{item.contact.phone ?? "no phone"}</span>
               <span>Confidence: {confidenceLabel(item.contactConfidence)}</span>
             </span>

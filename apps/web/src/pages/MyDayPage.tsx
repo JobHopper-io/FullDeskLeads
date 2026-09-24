@@ -1,79 +1,63 @@
-import { useEffect, useState } from "react";
-import { apiGet } from "../lib/apiClient";
-import { DISPOSITIONS } from "../lib/outcomes";
-import type { InteractionEvent, QueueItem } from "../lib/types";
+import { useState } from "react";
+import { useNavigate } from "react-router";
+import { isActive, isDue, isOverdue, startOfToday, useLeads } from "../lib/leads";
 import QueueList from "../components/QueueList";
 import LeadCard from "../components/LeadCard/LeadCard";
-import LeadDetail, { type DetailSection } from "../components/LeadDetail/LeadDetail";
 
-export default function QueuePage() {
-  const [items, setItems] = useState<QueueItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  // Layer 2 open for the selected lead, scrolled to this section; null = the queue view.
-  const [detailSection, setDetailSection] = useState<DetailSection | null>(null);
+const RAIL_SIZE = 3;
 
-  useEffect(() => {
-    // StrictMode (dev) runs this twice; without the flag the slower duplicate response would land after the
-    // recruiter has started working and reset the selection and any local updates.
-    let cancelled = false;
-    apiGet<QueueItem[]>("/queue").then(
-      (rows) => {
-        if (cancelled) return;
-        setItems(rows);
-        setSelectedId(rows[0]?.id ?? null);
-      },
-      (err: Error) => !cancelled && setError(err.message),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+// One dominant card and only the next three leads: showing everything invites browsing instead of
+// calling (full browsing is /leads).
+export default function MyDayPage() {
+  const { items, worked, logged } = useLeads();
+  const navigate = useNavigate();
+  // The lead the recruiter jumped to from the rail; otherwise (or once it's worked) the top of the queue.
+  const [pickedId, setPickedId] = useState<string | null>(null);
 
-  if (error) return <p className="error empty">Couldn't load the queue: {error}</p>;
-  if (!items) return <p className="empty">Loading queue…</p>;
-  if (!items.length) return <p className="empty">No leads in your queue yet.</p>;
+  const today = startOfToday();
+  const due = items!.filter((i) => isActive(i) && isDue(i));
+  const counters = [
+    { label: "New today", value: items!.filter((i) => i.deliveredAt && Date.parse(i.deliveredAt) >= today).length },
+    { label: "Worked today", value: items!.filter((i) => i.lastEvent && Date.parse(i.lastEvent.occurredAt) >= today).length },
+    { label: "Overdue follow-ups", value: items!.filter(isOverdue).length, overdue: true },
+    { label: "Active", value: due.length },
+  ];
 
-  const selected = items.find((i) => i.id === selectedId) ?? null;
-
-  const onLogged = (event: InteractionEvent) => {
-    if (!selected) return;
-    const label = DISPOSITIONS.find((d) => d.value === event.disposition)?.label ?? event.disposition;
-    setNotice(
-      `Logged “${label}” for ${selected.company}.` +
-        (event.state === "expired" ? " Out of attempts, lead expired." : event.state === "suppressed" ? " Lead suppressed." : ""),
-    );
-    // A follow-up in the future takes the lead out of the queue until it's due (/queue does the same).
-    const hidden = !!event.follow_up_at && (event.state === "contacted" || event.state === "viewed" || event.state === "new");
-    const rest = items.filter((i) => i.id !== selected.id);
-    if (hidden) {
-      setItems(rest);
-      setSelectedId(rest[0]?.id ?? null);
-    } else {
-      setItems(items.map((i) => (i.id === selected.id ? { ...i, state: event.state, noAnswerAttempts: i.noAnswerAttempts + (event.disposition === "no_answer" ? 1 : 0) } : i)));
-    }
-    // Back to the queue, where the confirmation notice shows (and the next lead is selected if this one left).
-    setDetailSection(null);
-  };
-
-  if (selected && detailSection) {
-    return (
-      <LeadDetail
-        item={selected} section={detailSection}
-        onBack={() => setDetailSection(null)}
-        onLogged={onLogged}
-        onFlagged={(contactId, flaggedAt) => setItems(items.map((i) => (i.contactId === contactId ? { ...i, contactFlaggedAt: flaggedAt } : i)))}
-      />
-    );
-  }
+  const queue = due.filter((i) => !worked.has(i.id));
+  const current = queue.find((i) => i.id === pickedId) ?? queue[0];
+  const rest = queue.filter((i) => i !== current);
 
   return (
-    <div className="queue-layout">
-      <QueueList items={items} selectedId={selectedId} onSelect={setSelectedId} />
-      <div className="queue-detail">
-        {notice && <p className="outcome-logged">{notice}</p>}
-        {selected && <LeadCard item={selected} onLogged={onLogged} onExpand={setDetailSection} />}
+    <div className="my-day">
+      <dl className="counters">
+        {counters.map((c) => (
+          <div key={c.label} className={c.overdue ? (c.value > 0 ? "counter overdue alert" : "counter overdue") : "counter"}>
+            <dt>{c.label}</dt>
+            <dd>{c.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="my-day-main">
+        <div className="my-day-card">
+          {current ? (
+            <LeadCard
+              key={current.id}
+              item={current}
+              submitLabel="Save and next"
+              onLogged={(event) => logged(current, event)}
+              onExpand={(section) => navigate(`/leads/${current.id}?section=${section}`)}
+            />
+          ) : (
+            <p className="empty">Queue clear. Nothing left to call right now.</p>
+          )}
+        </div>
+        {rest.length > 0 && (
+          <aside className="my-day-rail" aria-label="Up next">
+            <h2>Up next</h2>
+            <QueueList items={rest.slice(0, RAIL_SIZE)} selectedId={null} onSelect={setPickedId} />
+            {rest.length > RAIL_SIZE && <p className="rail-more">+ {rest.length - RAIL_SIZE} more</p>}
+          </aside>
+        )}
       </div>
     </div>
   );

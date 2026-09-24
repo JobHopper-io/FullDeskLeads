@@ -1,5 +1,6 @@
 import type { QueueItem } from "../../lib/types";
 import StateTag from "../StateTag";
+import ContactGlyph from "../ContactGlyph";
 
 // Placeholder until real why-now generation exists (deferred).
 const WHY_NOW_PLACEHOLDER = "Why-now intelligence isn't generated yet.";
@@ -16,7 +17,7 @@ export default function LeadCardLayer1({ item }: { item: QueueItem }) {
       )}
       <div className="company">{item.company}</div>
       <div className="row small">
-        <span>{name} · {title}</span>
+        <span className="contact"><ContactGlyph />{name} · {title}</span>
         {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
         <StateTag state={item.state} />
       </div>

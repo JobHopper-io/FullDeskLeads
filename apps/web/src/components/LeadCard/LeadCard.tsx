@@ -7,6 +7,7 @@ interface Props {
   item: QueueItem;
   onLogged: (event: InteractionEvent) => void;
   onExpand: (section: DetailSection) => void;
+  submitLabel?: string;
 }
 
 const EXPANDERS: { section: DetailSection; label: string }[] = [
@@ -15,12 +16,12 @@ const EXPANDERS: { section: DetailSection; label: string }[] = [
   { section: "role", label: "Role detail" },
 ];
 
-export default function LeadCard({ item, onLogged, onExpand }: Props) {
+export default function LeadCard({ item, onLogged, onExpand, submitLabel }: Props) {
   return (
     <article className="lead-card">
       <LeadCardLayer1 item={item} />
       <div className="card-actions">
-        <LogOutcome item={item} onLogged={onLogged} />
+        <LogOutcome item={item} onLogged={onLogged} submitLabel={submitLabel} />
         {EXPANDERS.map((e) => (
           <button key={e.section} className="chip" onClick={() => onExpand(e.section)}>{e.label}</button>
         ))}
