@@ -17,5 +17,8 @@
     "typescript": "^5.5.4",
     "tsx": "^4.16.2",
     "@types/node": "^20.14.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
