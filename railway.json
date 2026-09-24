@@ -1,7 +1,16 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "buildCommand": "pnpm --filter \"@fdl/api...\" build"
+    "buildCommand": "pnpm --filter \"@fdl/api...\" build",
+    "watchPatterns": [
+      "apps/api/**",
+      "packages/**",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      ".node-version",
+      "railway.json"
+    ]
   },
   "deploy": {
     "startCommand": "node apps/api/dist/server.js",
