@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { requireSeat } from "../plugins/auth.plugin.js";
 import { service } from "../serviceDb.js";
 
@@ -30,6 +30,12 @@ export interface QueueItem {
   noAnswerAttempts: number;
   /** Empty today: nothing populates leads.alternate_contact_ids yet. */
   alternateContacts: { name: string; title: string; phone: string | null }[];
+  /** When the lead is next due (follow-up); null = no follow-up set. */
+  nextActionAt: string | null;
+  /** Most recent logged outcome; null = never worked. followUpNote is the note saved with the follow-up it set. */
+  /** Every note logged on this lead, oldest first (History searches these). */
+  notes: string[];
+  lastEvent: { disposition: string; note: string | null; followUpNote: string | null; occurredAt: string } | null;
 }
 
 interface AssignmentRow {
@@ -37,7 +43,17 @@ interface AssignmentRow {
   tenant_id: string;
   state: string;
   delivered_at: string | null;
+  next_action_at: string | null;
   lead_id: string;
+}
+
+interface EventRow {
+  lead_assignment_id: string;
+  event_type: string;
+  disposition: string | null;
+  note: string | null;
+  follow_up_note: string | null;
+  occurred_at: string;
 }
 
 interface LeadRow {
@@ -52,99 +68,138 @@ interface LeadRow {
   primary_contact: { name: string; title: string; phone: string | null; email: string | null; confidence_score: number; phone_verified: boolean; verified_at: string | null };
 }
 
+/** The tenant's lead assignments as QueueItems, best first. dueOnly = the call queue (no future follow-ups). */
+async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<QueueItem[]> {
+  const { tenantId } = request.seat;
+
+  let query = request.db
+    .from("lead_assignments")
+    .select("id, tenant_id, state, delivered_at, next_action_at, lead_id")
+    .eq("tenant_id", tenantId);
+  // A follow-up in the future keeps the lead out of the queue until it's due.
+  if (dueOnly) query = query.or(`next_action_at.is.null,next_action_at.lte.${new Date().toISOString()}`);
+  const { data, error } = await query;
+  if (error) throw error;
+  const assignments = data as AssignmentRow[];
+
+  // Belt and braces on top of the .eq filter and RLS: a row from another tenant must never leave here.
+  if (assignments.some((a) => a.tenant_id !== tenantId)) throw new Error("tenant isolation violated in lead assignments");
+
+  const leadIds = assignments.map((a) => a.lead_id);
+  if (!leadIds.length) return [];
+
+  const { data: leadData, error: leadError } = await service()
+    .from("leads")
+    .select(
+      `id, why_now, alternate_contact_ids, primary_contact_id, opening_script, role_intelligence, objections,
+       hiring_signal:hiring_signals ( role_title, location, freshness_band, detected_at, company:companies ( name ) ),
+       primary_contact:contacts!primary_contact_id ( name, title, phone, email, confidence_score, phone_verified, verified_at )`,
+    )
+    .in("id", leadIds);
+  if (leadError) throw leadError;
+  const leadsById = new Map((leadData as unknown as LeadRow[]).map((l) => [l.id, l]));
+
+  const alternateIds = [...new Set([...leadsById.values()].flatMap((l) => l.alternate_contact_ids))];
+  const { data: altData, error: altError } = alternateIds.length
+    ? await service().from("contacts").select("id, name, title, phone").in("id", alternateIds)
+    : { data: [], error: null };
+  if (altError) throw altError;
+  const contactsById = new Map((altData as { id: string; name: string; title: string; phone: string | null }[]).map((c) => [c.id, c]));
+
+  // ponytail: reads every event for every assignment; paginate /leads if a tenant's history gets large.
+  const { data: eventRows, error: eventError } = await request.db
+    .from("interaction_events")
+    .select("lead_assignment_id, event_type, disposition, note, follow_up_note, occurred_at")
+    .eq("tenant_id", tenantId)
+    .in("lead_assignment_id", assignments.map((a) => a.id))
+    .order("occurred_at");
+  if (eventError) throw eventError;
+  const attempts = new Map<string, number>();
+  const lastEvent = new Map<string, EventRow>();
+  const notes = new Map<string, string[]>();
+  for (const r of eventRows as EventRow[]) {
+    if (r.note) notes.set(r.lead_assignment_id, [...(notes.get(r.lead_assignment_id) ?? []), r.note]);
+    if (r.disposition === "no_answer") attempts.set(r.lead_assignment_id, (attempts.get(r.lead_assignment_id) ?? 0) + 1);
+    lastEvent.set(r.lead_assignment_id, r);
+  }
+
+  const { data: flagRows, error: flagError } = await request.db
+    .from("contact_flags")
+    .select("contact_id, created_at")
+    .eq("tenant_id", tenantId)
+    .in("contact_id", [...leadsById.values()].map((l) => l.primary_contact_id));
+  if (flagError) throw flagError;
+  const flaggedAt = new Map((flagRows as { contact_id: string; created_at: string }[]).map((f) => [f.contact_id, f.created_at]));
+
+  const { data: scores, error: scoreError } = await request.db
+    .from("score_records")
+    .select("lead_id, confidence_score")
+    .eq("tenant_id", tenantId)
+    .in("lead_id", leadIds);
+  if (scoreError) throw scoreError;
+  const confidenceByLead = new Map((scores as { lead_id: string; confidence_score: number | null }[]).map((s) => [s.lead_id, s.confidence_score]));
+
+  // Ordered by the tenant's score_record confidence (best first, then newest), which is not sent to the client.
+  const scoreOf = (a: AssignmentRow) => confidenceByLead.get(a.lead_id) ?? -1;
+  return [...assignments]
+    .sort((x, y) => scoreOf(y) - scoreOf(x) || (y.delivered_at ?? "").localeCompare(x.delivered_at ?? ""))
+    .map((a): QueueItem => {
+      const lead = leadsById.get(a.lead_id)!;
+      const last = lastEvent.get(a.id);
+      return {
+        id: a.id,
+        state: a.state,
+        deliveredAt: a.delivered_at,
+        company: lead.hiring_signal.company.name,
+        roleTitle: lead.hiring_signal.role_title,
+        location: lead.hiring_signal.location,
+        contact: { name: lead.primary_contact.name, title: lead.primary_contact.title, phone: lead.primary_contact.phone, email: lead.primary_contact.email },
+        contactId: lead.primary_contact_id,
+        contactFlaggedAt: flaggedAt.get(lead.primary_contact_id) ?? null,
+        signalFirstSeen: lead.hiring_signal.detected_at,
+        contactConfidence: lead.primary_contact.confidence_score,
+        phoneVerifiedAt: lead.primary_contact.phone_verified ? lead.primary_contact.verified_at : null,
+        openingScript: lead.opening_script,
+        roleIntelligence: lead.role_intelligence,
+        objections: lead.objections,
+        freshnessBand: lead.hiring_signal.freshness_band,
+        whyNow: lead.why_now,
+        noAnswerAttempts: attempts.get(a.id) ?? 0,
+        alternateContacts: lead.alternate_contact_ids.flatMap((id) => contactsById.get(id) ?? []),
+        nextActionAt: a.next_action_at,
+        notes: notes.get(a.id) ?? [],
+        // Events logged before dispositions existed (0022) only have an event_type, e.g. "contacted".
+        lastEvent: last ? { disposition: last.disposition ?? last.event_type, note: last.note, followUpNote: last.follow_up_note, occurredAt: last.occurred_at } : null,
+      };
+    });
+}
+
 export async function queueRoutes(app: FastifyInstance) {
   // Who am I — lets the web app hold the seat (tenant_id, role) without touching tables itself.
   app.get("/me", { preHandler: requireSeat }, async (request) => request.seat);
 
-  app.get("/queue", { preHandler: requireSeat }, async (request): Promise<QueueItem[]> => {
-    const { tenantId } = request.seat;
+  app.get("/queue", { preHandler: requireSeat }, async (request) => loadItems(request, true));
 
-    const { data, error } = await request.db
-      .from("lead_assignments")
-      .select("id, tenant_id, state, delivered_at, lead_id")
-      .eq("tenant_id", tenantId)
-      // A follow-up in the future keeps the lead out of the queue until it's due.
-      .or(`next_action_at.is.null,next_action_at.lte.${new Date().toISOString()}`);
-    if (error) throw error;
-    const assignments = data as AssignmentRow[];
+  // Every assignment in any state, incl. future follow-ups: the web app derives My Day, New Leads,
+  // Follow-Ups and History from this one list.
+  app.get("/leads", { preHandler: requireSeat }, async (request) => loadItems(request, false));
 
-    // Belt and braces on top of the .eq filter and RLS: a row from another tenant must never leave here.
-    if (assignments.some((a) => a.tenant_id !== tenantId)) throw new Error("tenant isolation violated in /queue");
-
-    const leadIds = assignments.map((a) => a.lead_id);
-    if (!leadIds.length) return [];
-
-    const { data: leadData, error: leadError } = await service()
-      .from("leads")
-      .select(
-        `id, why_now, alternate_contact_ids, primary_contact_id, opening_script, role_intelligence, objections,
-         hiring_signal:hiring_signals ( role_title, location, freshness_band, detected_at, company:companies ( name ) ),
-         primary_contact:contacts!primary_contact_id ( name, title, phone, email, confidence_score, phone_verified, verified_at )`,
-      )
-      .in("id", leadIds);
-    if (leadError) throw leadError;
-    const leadsById = new Map((leadData as unknown as LeadRow[]).map((l) => [l.id, l]));
-
-    const alternateIds = [...new Set([...leadsById.values()].flatMap((l) => l.alternate_contact_ids))];
-    const { data: altData, error: altError } = alternateIds.length
-      ? await service().from("contacts").select("id, name, title, phone").in("id", alternateIds)
-      : { data: [], error: null };
-    if (altError) throw altError;
-    const contactsById = new Map((altData as { id: string; name: string; title: string; phone: string | null }[]).map((c) => [c.id, c]));
-
-    const { data: attemptRows, error: attemptError } = await request.db
-      .from("interaction_events")
-      .select("lead_assignment_id")
-      .eq("tenant_id", tenantId)
-      .eq("disposition", "no_answer")
-      .in("lead_assignment_id", assignments.map((a) => a.id));
-    if (attemptError) throw attemptError;
-    const attempts = new Map<string, number>();
-    for (const r of attemptRows as { lead_assignment_id: string }[]) attempts.set(r.lead_assignment_id, (attempts.get(r.lead_assignment_id) ?? 0) + 1);
-
-    const { data: flagRows, error: flagError } = await request.db
-      .from("contact_flags")
-      .select("contact_id, created_at")
-      .eq("tenant_id", tenantId)
-      .in("contact_id", [...leadsById.values()].map((l) => l.primary_contact_id));
-    if (flagError) throw flagError;
-    const flaggedAt = new Map((flagRows as { contact_id: string; created_at: string }[]).map((f) => [f.contact_id, f.created_at]));
-
-    const { data: scores, error: scoreError } = await request.db
-      .from("score_records")
-      .select("lead_id, confidence_score")
-      .eq("tenant_id", tenantId)
-      .in("lead_id", leadIds);
-    if (scoreError) throw scoreError;
-    const confidenceByLead = new Map((scores as { lead_id: string; confidence_score: number | null }[]).map((s) => [s.lead_id, s.confidence_score]));
-
-    // Ordered by the tenant's score_record confidence (best first, then newest), which is not sent to the client.
-    const scoreOf = (a: AssignmentRow) => confidenceByLead.get(a.lead_id) ?? -1;
-    return [...assignments]
-      .sort((x, y) => scoreOf(y) - scoreOf(x) || (y.delivered_at ?? "").localeCompare(x.delivered_at ?? ""))
-      .map((a): QueueItem => {
-        const lead = leadsById.get(a.lead_id)!;
-        return {
-          id: a.id,
-          state: a.state,
-          deliveredAt: a.delivered_at,
-          company: lead.hiring_signal.company.name,
-          roleTitle: lead.hiring_signal.role_title,
-          location: lead.hiring_signal.location,
-          contact: { name: lead.primary_contact.name, title: lead.primary_contact.title, phone: lead.primary_contact.phone, email: lead.primary_contact.email },
-          contactId: lead.primary_contact_id,
-          contactFlaggedAt: flaggedAt.get(lead.primary_contact_id) ?? null,
-          signalFirstSeen: lead.hiring_signal.detected_at,
-          contactConfidence: lead.primary_contact.confidence_score,
-          phoneVerifiedAt: lead.primary_contact.phone_verified ? lead.primary_contact.verified_at : null,
-          openingScript: lead.opening_script,
-          roleIntelligence: lead.role_intelligence,
-          objections: lead.objections,
-          freshnessBand: lead.hiring_signal.freshness_band,
-          whyNow: lead.why_now,
-          noAnswerAttempts: attempts.get(a.id) ?? 0,
-          alternateContacts: lead.alternate_contact_ids.flatMap((id) => contactsById.get(id) ?? []),
-        };
-      });
-  });
+  // One assignment's outcome timeline, oldest first (History's right rail).
+  app.get<{ Params: { leadAssignmentId: string } }>(
+    "/lead-assignments/:leadAssignmentId/events",
+    {
+      preHandler: requireSeat,
+      schema: { params: { type: "object", required: ["leadAssignmentId"], properties: { leadAssignmentId: { type: "string", format: "uuid" } } } },
+    },
+    async (request) => {
+      const { data, error } = await request.db
+        .from("interaction_events")
+        .select("id, occurred_at, event_type, disposition, note, follow_up_at, follow_up_note, not_a_fit_reason")
+        .eq("tenant_id", request.seat.tenantId)
+        .eq("lead_assignment_id", request.params.leadAssignmentId)
+        .order("occurred_at");
+      if (error) throw error;
+      return data;
+    },
+  );
 }
