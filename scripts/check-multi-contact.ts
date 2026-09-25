@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  assignPrimaryAndAlternates, buildTierTitles, humanKey, isPlausibleSiteLead, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
+  assignPrimaryAndAlternates, buildTierTitles, humanKey, isPlausibleHr, isPlausibleSiteLead, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
 } from "../packages/pipeline/src/enrich/multiContact.js";
 import { distanceMiles, distanceToOpening, lookupPlace, parseLocation, siteVsCorporate } from "../packages/pipeline/src/enrich/geo.js";
 import type { SearchContactResult } from "../packages/enrichment/src/index.js";
@@ -96,6 +96,22 @@ assert(sel.rejected[0].reason.startsWith("not a plausible site lead"));
 assert.deepEqual(selectCandidates([...tiered(crestSite.slice(0, 2), "site"), ...hr], ours).picked.map((x) => x.name), ["H1", "H2"]);
 // the same title from the FUNCTION search is unaffected (that filter is for the site tier only)
 assert.equal(selectCandidates(tiered([acme("q1", "Q", "Legal Operations Manager")], "function"), ours).picked.length, 1);
+
+// ── HR tier: an HR / talent contact, not another department using an HR word ─────────────────────────────
+// REAL titles: "talent" matched a marketing manager (Gerald Laming) and it landed in the HR tier.
+assert(!isPlausibleHr("Marketing Manager - National Talent Marketing"));
+assert.equal(tierOf("Marketing Manager - National Talent Marketing"), "other");
+for (const t of ["Human Resources Manager", "Talent Manager", "Talent Acquisition Manager - Operations"]) assert(isPlausibleHr(t), `${t} is HR`);
+// SYNTHETIC
+for (const t of ["HR Manager", "Director of Talent", "Recruiting Manager", "Corporate Recruiter", "VP, People & Culture", "HR Operations Manager", "Talent Acquisition Partner"]) assert(isPlausibleHr(t), `${t} is HR`);
+for (const t of ["Talent Marketing Manager", "Recruitment Marketing Director", "Sales Recruiter Training Lead", "Brand and Talent Communications Manager", "IT Talent Program Manager", "Engineering Recruiter Enablement Lead"]) assert(!isPlausibleHr(t), `${t} is not HR`);
+assert(!isPlausibleHr("Accounting/HR Manager"));          // a real mixed role, left out on purpose (conservative); documented in multiContact.ts
+assert.equal(tierOf("HR Operations Manager"), "hr");       // HR wins over the site-lead reading of "Operations Manager"
+// in selection: the marketing "talent" person is dropped from the HR tier and not replaced by anyone unfit
+const hrMix = tiered([acme("h9", "Gerald Laming", "Marketing Manager - National Talent Marketing"), acme("h8", "Real HR", "Human Resources Manager")], "hr");
+const hrSel = selectCandidates(hrMix, ours);
+assert.deepEqual(hrSel.picked.map((x) => x.name), ["Real HR"]);
+assert(hrSel.rejected[0].reason.startsWith("not a plausible HR contact"));
 
 // ── one human, two Seamless records (REAL: Madeline M Steepleton on two signals in the 2026-09-25 re-run) ──
 assert.equal(humanKey("Madeline M Steepleton", "318.446.6031"), humanKey(" madeline  m steepleton", "(318) 446-6031"));

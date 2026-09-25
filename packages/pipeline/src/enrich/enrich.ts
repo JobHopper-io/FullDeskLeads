@@ -4,6 +4,10 @@ import { SeamlessClient, SeamlessPollTimeoutError, type PollResult } from "@fdl/
 import { getDb } from "../db.js";
 import { TIER_ORDER, buildTierTitles, humanKey, selectCandidates, type TieredResult } from "./multiContact.js";
 import { siteVsCorporate } from "./geo.js";
+import { deriveJobTitleHints, isGenericFallback } from "./roleFamily.js";
+
+// The role -> family mapping lives in roleFamily.ts (pure, no client), and is still exported from here.
+export { deriveJobTitleHints };
 
 const log = createLogger("enrich");
 
@@ -13,71 +17,6 @@ const client = new SeamlessClient();
 export function getSeamlessCreditSnapshot(): { first: number | null; last: number | null } {
   return client.getCreditBalanceSnapshot();
 }
-
-/**
- * Placeholder heuristic for who to search for at a company: a keyword match on the hiring
- * signal's own role_title, pointed at a plausible supervisor/manager title in that function.
- * The real contact-selection algorithm is a separate later task — this just gives searchContacts
- * something reasonable to search on.
- *
- * Confirmed by direct testing against real data: the original 4-branch version sent 20 of 25
- * real role_titles from one company to the same generic fallback, which made Seamless return
- * the identical contact for genuinely unrelated roles (Construction Manager, CNC Machinist,
- * Buyer, Boilermaker A all resolved to the same HR Manager). Branches below were added to cover
- * exactly the role families observed collapsing.
- *
- * Deliberately not special-cased here: intern/transfer-portal/job-shadowing postings ("2027
- * Internships", "Transfer Portal", "Job Shadowing Portal") aren't roles with a hiring manager to
- * search for in the normal sense — they fall through to the generic fallback rather than getting
- * their own hint branch, since giving them a hint would imply this heuristic can meaningfully
- * point at someone for them. Whether they should be filtered out before ever reaching enrichment
- * is a separate, unresolved question.
- */
-export function deriveJobTitleHints(roleTitle: string): string[] {
-  const title = roleTitle.toLowerCase();
-  if (title.includes("production") || title.includes("manufactur")) {
-    return ["Production Manager", "Production Supervisor", "Plant Manager"];
-  }
-  if (title.includes("maintenance") || title.includes("facilit")) {
-    return ["Maintenance Manager", "Maintenance Supervisor", "Facilities Manager"];
-  }
-  if (title.includes("warehouse") || title.includes("logistics") || title.includes("distribution")) {
-    return ["Warehouse Manager", "Logistics Manager", "Operations Manager"];
-  }
-  if (title.includes("driver") || title.includes("cdl") || title.includes("transport") || title.includes("fleet")) {
-    return ["Fleet Manager", "Transportation Manager", "Operations Manager"];
-  }
-  if (title.includes("construction") || title.includes("build") || title.includes("superintendent")) {
-    return ["Construction Manager", "Project Manager", "Site Superintendent"];
-  }
-  if (
-    title.includes("machinist") ||
-    title.includes("cnc") ||
-    title.includes("fabricat") ||
-    title.includes("weld") ||
-    title.includes("boilermaker")
-  ) {
-    return ["Plant Manager", "Production Manager", "Operations Manager"];
-  }
-  if (title.includes("engineer") || title.includes("design")) {
-    return ["Engineering Manager", "Director of Engineering", "VP Engineering"];
-  }
-  if (title.includes("procurement") || title.includes("buyer") || title.includes("purchasing")) {
-    return ["Procurement Manager", "Purchasing Director", "Supply Chain Manager"];
-  }
-  if (title.includes("business development") || title.includes("sales") || title.includes("marketing")) {
-    return ["Director of Business Development", "Sales Manager", "VP Sales"];
-  }
-  if (title.includes("accounting") || title.includes("finance") || title.includes("account")) {
-    return ["Controller", "Finance Director", "CFO"];
-  }
-  return [...GENERIC_FALLBACK_TITLES];
-}
-
-// What a role with no family of its own gets. These are the site-lead and HR titles, not a function's own, so
-// such a role has no function tier to search (see buildTierTitles).
-const GENERIC_FALLBACK_TITLES = ["Operations Manager", "General Manager", "HR Manager"];
-const isGenericFallback = (hints: string[]) => hints.length === GENERIC_FALLBACK_TITLES.length && hints.every((t, i) => t === GENERIC_FALLBACK_TITLES[i]);
 
 // Identical searches (same company domain, same titles) return the same people, and two of the three tier searches
 // never vary by role: every signal at a company runs the same site-lead and HR searches. Each search costs 1 credit,

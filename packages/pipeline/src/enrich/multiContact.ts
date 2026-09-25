@@ -63,6 +63,21 @@ export function humanKey(name: string, phone: string): string {
   return `${name.trim().toLowerCase().replace(/\s+/g, " ")}|${phone.replace(/\D/g, "")}`;
 }
 
+const HR_TITLE = /\b(?:hr|human resources|talent|recruit\w*|people (?:&|and)? ?culture)\b/i;
+/**
+ * Departments whose own title happens to use an HR word: "Marketing Manager - National Talent Marketing" is
+ * marketing, not HR. Same conservative stance as the site lead filter: a real HR manager wrongly left out just
+ * falls through, whereas a marketing, finance or engineering manager wrongly counted as HR would be the tier's
+ * contact. Errs toward leaving out: "Accounting/HR Manager" (a real, mixed role) is excluded too.
+ */
+const NON_HR_DEPARTMENT =
+  /\b(?:marketing|sales|brand|advertis\w*|communications?|engineering|engineer|software|it|information technology|legal|finance|financial|accounting|accountant|treasurer|supply chain|logistics|procurement|purchasing|quality|safety|design)\b/i;
+
+/** Is this title plausibly HR / talent acquisition, and not another department that uses an HR word? */
+export function isPlausibleHr(title: string): boolean {
+  return HR_TITLE.test(title) && !NON_HR_DEPARTMENT.test(title);
+}
+
 /** Not a tier the searches produce: for a contact whose tier isn't known and can't be guessed safely. Ranks last. */
 export type GuessedTier = ContactTier | "other";
 
@@ -72,7 +87,7 @@ export type GuessedTier = ContactTier | "other";
  * plausible site lead is "other", which ranks below every real tier, never assumed to be a function manager.
  */
 export function tierOf(title: string): GuessedTier {
-  if (/\b(hr|human resources|talent|recruit\w*|people (?:&|and)? ?culture)\b/i.test(title)) return "hr";
+  if (isPlausibleHr(title)) return "hr";
   return isPlausibleSiteLead(title) ? "site" : "other";
 }
 
@@ -144,6 +159,8 @@ export function selectCandidates(
     // A search for "Operations Manager" also returns IT, Legal and Finance operations managers. Those are not
     // site leads, so they aren't offered as one (they fall away, and a lower tier fills the slot).
     else if (r.tier === "site" && !isPlausibleSiteLead(r.title)) rejected.push({ result: r, reason: `not a plausible site lead: ${r.title}` });
+    // The same for HR: a search for "Talent Acquisition Manager" also returns "Talent Marketing" managers.
+    else if (r.tier === "hr" && !isPlausibleHr(r.title)) rejected.push({ result: r, reason: `not a plausible HR contact: ${r.title}` });
     else eligible.push(r);
   }
 
