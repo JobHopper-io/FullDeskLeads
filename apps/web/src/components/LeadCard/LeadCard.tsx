@@ -8,6 +8,8 @@ interface Props {
   onLogged: (event: InteractionEvent) => void;
   onExpand: (section: DetailSection) => void;
   submitLabel?: string;
+  /** Place in today's queue, shown in the card header as "Lead 07 of 36". */
+  position?: { n: number; total: number };
 }
 
 const EXPANDERS: { section: DetailSection; label: string }[] = [
@@ -16,9 +18,17 @@ const EXPANDERS: { section: DetailSection; label: string }[] = [
   { section: "role", label: "Role detail" },
 ];
 
-export default function LeadCard({ item, onLogged, onExpand, submitLabel }: Props) {
+// Zero-padded to the width of the total, so it reads "07 of 36" and never shifts as it counts up.
+const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width), "0");
+
+export default function LeadCard({ item, onLogged, onExpand, submitLabel, position }: Props) {
   return (
     <article className="lead-card">
+      {position && (
+        <header className="card-position eyebrow" aria-label={`Lead ${position.n} of ${position.total} in today's queue`}>
+          Lead {pad(position.n, String(position.total).length)} of {pad(position.total, 2)}
+        </header>
+      )}
       <LeadCardLayer1 item={item} />
       <OutcomePanel item={item} onLogged={onLogged} submitLabel={submitLabel} />
       <div className="card-actions">

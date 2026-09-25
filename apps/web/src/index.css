@@ -152,6 +152,8 @@ strong, b, th { font-weight: 500; }
 
 /* ── Lead card, Layer 1. The phone number is the page's focal point; everything else steps back. ── */
 .lead-card { background: var(--fdl-white); border-radius: var(--fdl-radius-lg); padding: 40px 44px 32px; display: grid; gap: 14px; max-width: 680px; box-shadow: 0 0 0 1px var(--fdl-hairline); }
+/* Quiet header line: where you are in today's queue. Deliberately small and muted, so the phone number stays the focal point. */
+.lead-card .card-position { font-variant-numeric: tabular-nums; }
 .lead-card .phone {
   font-size: 4rem; font-weight: 500; line-height: 1; letter-spacing: -0.02em;
   color: var(--fdl-green); text-decoration: none; font-variant-numeric: tabular-nums; word-break: break-word; margin-bottom: 12px;
