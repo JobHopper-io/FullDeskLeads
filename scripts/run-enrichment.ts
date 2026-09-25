@@ -14,6 +14,13 @@ const db = createServiceClient(loadEnv());
 
 let pending = await hiringSignalRepository(db).listWithoutContact();
 
+// Optional scope: `--ids=<hiring_signal_id>,<id>` runs exactly those signals (they must still be pending).
+const idsArg = process.argv.find((a) => a.startsWith("--ids="));
+if (idsArg) {
+  const wanted = new Set(idsArg.slice("--ids=".length).split(","));
+  pending = pending.filter((s) => wanted.has(s.id));
+}
+
 // Optional scope: `--domains=a.com,b.com` restricts the run to those companies (matched on companies.domain).
 const domainsArg = process.argv.find((a) => a.startsWith("--domains="));
 if (domainsArg) {
@@ -31,6 +38,7 @@ Usage:
   tsx scripts/run-enrichment.ts <limit>   run against the first <limit> signals
   tsx scripts/run-enrichment.ts all       run against all ${pending.length}
   add --domains=a.com,b.com to restrict either form to those companies
+  add --ids=<id>,<id> to run exactly those hiring_signals
 `);
   process.exit(1);
 }
@@ -53,11 +61,18 @@ const RUN_CONCURRENCY = 2;
 const statusCounts = new Map<string, number>();
 let processed = 0;
 let contactsFound = 0;
+let contactsWritten = 0;
+let researchSubmitted = 0;
+const contactCountBySignal = new Map<number, number>();
 let researchCallsMade = 0;
 
 async function runOne(hiringSignalId: string): Promise<void> {
   try {
-    const { contactId, terminalStatus } = await enrichHiringSignal(hiringSignalId);
+    const { contactId, terminalStatus, contactIds, researchSubmitted: submitted } = await enrichHiringSignal(hiringSignalId);
+    const n = contactIds?.length ?? (contactId ? 1 : 0);
+    contactsWritten += n;
+    researchSubmitted += submitted ?? 0;
+    contactCountBySignal.set(n, (contactCountBySignal.get(n) ?? 0) + 1);
     const status = terminalStatus ?? "unknown";
     statusCounts.set(status, (statusCounts.get(status) ?? 0) + 1);
     // Confirmed conflated with actual billed credits: this counts researchContacts calls made,
@@ -101,7 +116,11 @@ console.log(`
 Enrichment summary
 -------------------
 Signals processed:              ${processed}
-Contacts found (done):          ${contactsFound}
+Signals with a contact (done):  ${contactsFound}
+Contacts written in total:      ${contactsWritten}
+Contacts per signal:            ${[...contactCountBySignal.entries()].sort((a, b) => a[0] - b[0]).map(([n, c]) => `${n}: ${c}`).join("   ")}
+Signals with 2+ contacts:       ${[...contactCountBySignal.entries()].filter(([n]) => n >= 2).reduce((a, [, c]) => a + c, 0)} of ${processed}
+Contacts sent to research:      ${researchSubmitted}
 No contact found:               ${processed - contactsFound}
 Research requests submitted:    ${researchCallsMade}  (a request count, not confirmed billed credits — see below)
 Seamless credit balance:        ${creditLine}

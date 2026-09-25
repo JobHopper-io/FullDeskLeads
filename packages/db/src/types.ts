@@ -101,6 +101,11 @@ export interface ContactRow {
   source_contact_id: string | null;
   verified_at: string | null;
   created_at: string;
+  /** From Seamless's search response (migration 0024); null on rows written before it existed. */
+  contact_city: string | null;
+  contact_state: string | null;
+  /** 'corporate' = at the company's HQ city + state, 'site' = elsewhere, null = unknown. */
+  site_vs_corporate: "site" | "corporate" | null;
 }
 
 export interface EnrichmentAttemptRow {

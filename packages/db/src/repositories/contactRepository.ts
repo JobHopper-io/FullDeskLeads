@@ -17,6 +17,9 @@ export function contactRepository(db: SupabaseClient) {
       confidenceScore: number;
       source: string;
       sourceContactId?: string | null;
+      contactCity?: string | null;
+      contactState?: string | null;
+      siteVsCorporate?: "site" | "corporate" | null;
     }): Promise<ContactRow> => {
       const { data, error } = await db
         .from("contacts")
@@ -30,6 +33,9 @@ export function contactRepository(db: SupabaseClient) {
           confidence_score: input.confidenceScore,
           source: input.source,
           source_contact_id: input.sourceContactId ?? null,
+          contact_city: input.contactCity ?? null,
+          contact_state: input.contactState ?? null,
+          site_vs_corporate: input.siteVsCorporate ?? null,
         })
         .select()
         .single();
@@ -37,12 +43,31 @@ export function contactRepository(db: SupabaseClient) {
       return data;
     },
 
-    // Day 9-10 scoring/emission: the one contact tied to this specific hiring_signal.
+    // Every contact found for this signal, best first (highest confidence; earliest write breaks ties, so
+    // the order is stable). Several per signal since migration 0024.
+    listByHiringSignalId: async (hiringSignalId: string): Promise<ContactRow[]> => {
+      const { data, error } = await db
+        .from("contacts")
+        .select("*")
+        .eq("hiring_signal_id", hiringSignalId)
+        .order("confidence_score", { ascending: false })
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+
+    // Day 9-10 scoring/emission: the signal's primary contact, i.e. the highest-confidence one. This used to
+    // be a .maybeSingle() that assumed one row and would have thrown (PGRST116) on the second contact.
     findByHiringSignalId: async (hiringSignalId: string): Promise<ContactRow | null> => {
       const { data, error } = await db
         .from("contacts")
         .select("*")
         .eq("hiring_signal_id", hiringSignalId)
+        .order("confidence_score", { ascending: false })
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(1)
         .maybeSingle();
       if (error) throw error;
       return data;

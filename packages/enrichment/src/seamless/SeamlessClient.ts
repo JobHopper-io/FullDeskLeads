@@ -36,6 +36,15 @@ export interface SearchContactResult {
   searchResultId: string;
   name: string;
   title: string;
+  // Confirmed against real search responses: the contact's own location and the company it belongs to. Seamless
+  // also returns results for *other* companies when the domain filter has no exact match, so `domain` and
+  // `company` are what lets a caller check a result is really this company's person.
+  domain: string | null;
+  company: string | null;
+  city: string | null;
+  state: string | null;
+  companyCity: string | null;
+  companyState: string | null;
 }
 
 export type SeamlessResearchStatus =
@@ -143,16 +152,31 @@ export class SeamlessClient {
     return (await response.json()) as T;
   }
 
-  /** POST /search/contacts. Never throws on zero results — returns an empty array. */
-  async searchContacts(domain: string, jobTitleHints: string[]): Promise<SearchContactResult[]> {
-    const result = await this.request<{ data: { searchResultId: string; name: string; title: string }[] }>(
-      "/search/contacts",
-      {
-        method: "POST",
-        body: JSON.stringify({ companyDomain: [domain], jobTitle: jobTitleHints, limit: 10 }),
-      },
-    );
-    return (result.data ?? []).map(({ searchResultId, name, title }) => ({ searchResultId, name, title }));
+  /**
+   * POST /search/contacts. Never throws on zero results — returns an empty array. Confirmed against the real
+   * credit header: each search call costs 1 credit (not free), on top of 1 per contact researched.
+   */
+  async searchContacts(domain: string, jobTitleHints: string[], limit = 10): Promise<SearchContactResult[]> {
+    type Raw = Partial<Record<"domain" | "company" | "companyName" | "city" | "state" | "companyCity" | "companyState", string | null>> & {
+      searchResultId: string;
+      name: string;
+      title: string;
+    };
+    const result = await this.request<{ data: Raw[] }>("/search/contacts", {
+      method: "POST",
+      body: JSON.stringify({ companyDomain: [domain], jobTitle: jobTitleHints, limit }),
+    });
+    return (result.data ?? []).map((r) => ({
+      searchResultId: r.searchResultId,
+      name: r.name,
+      title: r.title,
+      domain: r.domain ?? null,
+      company: r.companyName ?? r.company ?? null,
+      city: r.city ?? null,
+      state: r.state ?? null,
+      companyCity: r.companyCity ?? null,
+      companyState: r.companyState ?? null,
+    }));
   }
 
   /** POST /contacts/research. Consumes one credit per id submitted — logged here so spend is visible. */

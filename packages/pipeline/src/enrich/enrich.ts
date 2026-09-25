@@ -2,6 +2,7 @@ import { createLogger } from "@fdl/shared";
 import { companyRepository, contactRepository, enrichmentAttemptRepository, hiringSignalRepository } from "@fdl/db";
 import { SeamlessClient, SeamlessPollTimeoutError, type PollResult } from "@fdl/enrichment";
 import { getDb } from "../db.js";
+import { MAX_CONTACTS_PER_SIGNAL, buildTitleTargets, selectCandidates, siteVsCorporate, tierOf } from "./multiContact.js";
 
 const log = createLogger("enrich");
 
@@ -81,8 +82,13 @@ export function parseConfidence(percent: string | null | undefined): number | nu
 }
 
 export async function enrichHiringSignal(hiringSignalId: string): Promise<{
+  /** The signal's primary contact: the highest-confidence one found. */
   contactId: string | null;
   confidence: number | null;
+  // Additive: every contact written this call (primary first), and how many contacts were sent to research
+  // (each is 1 credit unless Seamless already had it), so a run can report hit rate and spend.
+  contactIds?: string[];
+  researchSubmitted?: number;
   // Extra beyond the base contract, additive only: lets run-enrichment.ts break its summary down
   // by outcome (done/error/missing/credits-exhausted/no-domain/...) without re-deriving it.
   terminalStatus?: string;
@@ -129,7 +135,9 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       return { contactId: null, confidence: null, terminalStatus: "no-domain" };
     }
 
-    const jobTitleHints = deriveJobTitleHints(hiringSignal.role_title);
+    // One search (1 credit) over three tiers of title (the role family's own, site leadership, HR), then up to
+    // MAX_CONTACTS_PER_SIGNAL distinct people from it, at most one per tier before any tier repeats.
+    const jobTitleHints = buildTitleTargets(deriveJobTitleHints(hiringSignal.role_title));
     const searchResults = await client.searchContacts(company.domain, jobTitleHints);
     if (searchResults.length === 0) {
       log.info({ hiringSignalId, domain: company.domain, jobTitleHints }, "seamless search returned no candidates");
@@ -137,99 +145,172 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       return { contactId: null, confidence: null, terminalStatus: "no-search-results" };
     }
 
-    // Single highest-relevance candidate for now — full weighted selection is a separate later task.
-    const topCandidate = searchResults[0];
-    searchResultId = topCandidate.searchResultId;
-    [requestId] = await client.researchContacts([searchResultId]);
+    // Seamless returns other companies' people when the domain filter has no exact hit, so anyone who isn't
+    // this company's (by domain or company name) is dropped before a single research credit is spent on them.
+    const { picked, rejected } = selectCandidates(searchResults, { domain: company.domain, companyName: company.name });
+    if (rejected.length > 0) {
+      log.info(
+        { hiringSignalId, domain: company.domain, rejected: rejected.map((x) => `${x.result.name}: ${x.reason}`) },
+        "search results dropped as not this company's people",
+      );
+    }
+    if (picked.length === 0) {
+      await recordAttempt("no-matching-company", {
+        message: `${searchResults.length} search result(s), none from this company (${rejected[0]?.reason ?? "n/a"})`,
+      });
+      return { contactId: null, confidence: null, terminalStatus: "no-matching-company" };
+    }
+
+    // Research every picked person in one request. Seamless returns one requestId per id submitted, in order.
+    const requestIds = await client.researchContacts(picked.map((c) => c.searchResultId));
+    if (requestIds.length !== picked.length) {
+      throw new Error(`seamless returned ${requestIds.length} requestId(s) for ${picked.length} researched contact(s)`);
+    }
 
     let results: PollResult[];
     try {
-      results = await client.pollUntilDone([requestId]);
+      results = await client.pollUntilDone(requestIds);
     } catch (err) {
-      if (err instanceof SeamlessPollTimeoutError) {
-        log.warn({ hiringSignalId, requestId }, "seamless research poll timed out — treating as no contact found");
-        await recordAttempt("poll-timeout");
-        return { contactId: null, confidence: null, terminalStatus: "poll-timeout" };
+      if (!(err instanceof SeamlessPollTimeoutError)) throw err;
+      // Keep whoever finished; the ones still pending are simply not contacts this time.
+      log.warn({ hiringSignalId, pending: err.pendingRequestIds.length }, "seamless research poll timed out — keeping the contacts that finished");
+      results = await client.pollResearch(requestIds);
+    }
+    const byRequest = new Map(results.map((res) => [res.requestId, res]));
+
+    // Narrow, single-shot recovery, now for the whole batch in one call: a "duplicate" carries no contact object,
+    // only a pointer (additionalData.initialRequestId) to the original request, which is often already done.
+    // Polling those once submits no new research (zero additional credits). If one is still pending, unresolved
+    // or has no usable phone it falls through to the failure handling below: no loop, no further retry.
+    const duplicateOf = new Map<string, string>();
+    for (const res of results) {
+      if (res.status === "duplicate" && res.additionalData?.initialRequestId) duplicateOf.set(res.requestId, res.additionalData.initialRequestId);
+    }
+    const recoveredByInitial = new Map<string, PollResult>();
+    if (duplicateOf.size > 0) {
+      for (const rec of await client.pollResearch([...new Set(duplicateOf.values())])) recoveredByInitial.set(rec.requestId, rec);
+    }
+
+    interface Found {
+      candidate: (typeof picked)[number];
+      requestId: string;
+      contact: NonNullable<PollResult["contact"]>;
+      confidence: number | null;
+      recovered: boolean;
+    }
+    const found: Found[] = [];
+    const failures: string[] = [];
+    const seenPeople = new Set<string>();
+    picked.forEach((candidate, i) => {
+      const requestId = requestIds[i];
+      const res = byRequest.get(requestId);
+      let final: PollResult | undefined = res?.status === "done" && res.contact ? res : undefined;
+      let recovered = false;
+      const initial = duplicateOf.get(requestId);
+      if (!final && initial) {
+        const rec = recoveredByInitial.get(initial);
+        if (rec?.status === "done" && rec.contact) {
+          log.info({ hiringSignalId, requestId, initialRequestId: initial }, "duplicate's initial request already resolved — recovering its contact instead of discarding it");
+          final = rec;
+          recovered = true;
+        }
       }
-      throw err;
-    }
-
-    const result = results[0];
-    let finalResult: PollResult | undefined = result.status === "done" && result.contact ? result : undefined;
-    let recoveredViaDuplicate = false;
-
-    // Narrow, single-shot recovery: a "duplicate" carries no contact object itself, only a
-    // pointer (additionalData.initialRequestId) to the original request. That original request
-    // is often already done — polling it once (no new research submitted, zero additional
-    // credits) can recover a real, already-researched contact instead of discarding it. If the
-    // initial request is itself still pending, unresolved, or has no usable phone, this falls
-    // through to the normal not-found/no-phone handling below — no loop, no further retry.
-    if (!finalResult && result.status === "duplicate" && result.additionalData?.initialRequestId) {
-      const [recovered] = await client.pollResearch([result.additionalData.initialRequestId]);
-      if (recovered?.status === "done" && recovered.contact) {
-        log.info(
-          { hiringSignalId, requestId, initialRequestId: result.additionalData.initialRequestId },
-          "duplicate's initial request already resolved — recovering its contact instead of discarding it",
-        );
-        finalResult = recovered;
-        recoveredViaDuplicate = true;
+      if (!final) {
+        // error/missing/duplicate (unrecovered)/not found/credits-exhausted are all expected outcomes for some
+        // fraction of lookups, not thrown errors — just log and move on.
+        log.info({ hiringSignalId, requestId, status: res?.status, message: res?.message }, "seamless research did not produce a usable contact");
+        failures.push(res?.status ?? "no-result");
+        return;
       }
-    }
-
-    if (!finalResult) {
-      // error/missing/duplicate (unrecovered)/not found/credits-exhausted are all expected
-      // outcomes for some fraction of lookups, not thrown errors — just log and move on.
-      log.info(
-        { hiringSignalId, requestId, status: result.status, message: result.message },
-        "seamless research did not produce a usable contact",
-      );
-      await recordAttempt(result.status, { message: result.message ?? null });
-      return { contactId: null, confidence: null, terminalStatus: result.status };
-    }
-
-    // Seamless can return contactPhone1 as "" rather than omitting it — that's not a usable
-    // contact for outreach, so treat it the same as not-found rather than writing a phoneless
-    // "success" with confidence 0.
-    if (!finalResult.contact!.contactPhone1) {
-      log.info(
-        { hiringSignalId, requestId, recoveredViaDuplicate },
-        "seamless research done but returned no usable phone — treating as not found",
-      );
-      await recordAttempt("no-phone");
-      return { contactId: null, confidence: null, terminalStatus: "no-phone" };
-    }
-
-    const confidence = parseConfidence(finalResult.contact!.contactPhone1TotalAI);
-    const contact = await contacts.create({
-      companyId: company.id,
-      hiringSignalId,
-      name: finalResult.contact!.fullName,
-      title: finalResult.contact!.title,
-      phone: finalResult.contact!.contactPhone1,
-      email: finalResult.contact!.email1,
-      confidenceScore: confidence ?? 0,
-      source: "seamless",
-      sourceContactId: finalResult.contact!.contactId,
+      // Seamless can return contactPhone1 as "" rather than omitting it — not a usable contact for outreach.
+      if (!final.contact!.contactPhone1) {
+        log.info({ hiringSignalId, requestId, recovered }, "seamless research done but returned no usable phone — treating as not found");
+        failures.push("no-phone");
+        return;
+      }
+      // The (hiring_signal_id, source_contact_id) key (migration 0024) needs Seamless's own id, and two picked
+      // candidates can resolve to the same person (a duplicate recovering to another pick's request).
+      const personId = final.contact!.contactId;
+      if (!personId || seenPeople.has(personId)) {
+        failures.push(personId ? "same-person" : "no-contact-id");
+        return;
+      }
+      seenPeople.add(personId);
+      found.push({ candidate, requestId, contact: final.contact!, confidence: parseConfidence(final.contact!.contactPhone1TotalAI), recovered });
     });
+
+    if (found.length === 0) {
+      // Same terminal statuses as before: with one candidate this is exactly the old behavior. With several, the
+      // status is the first failure's.
+      const status = failures[0] ?? "no-result";
+      await recordAttempt(status, { message: failures.length > 1 ? `all ${failures.length} researched contacts failed: ${failures.join(", ")}` : null });
+      return { contactId: null, confidence: null, terminalStatus: status, researchSubmitted: picked.length };
+    }
+
+    const created: { id: string; confidence: number | null; source: Found }[] = [];
+    for (const f of found) {
+      const cand = f.candidate;
+      try {
+        const contact = await contacts.create({
+          companyId: company.id,
+          hiringSignalId,
+          name: f.contact.fullName,
+          title: f.contact.title,
+          phone: f.contact.contactPhone1,
+          email: f.contact.email1,
+          confidenceScore: f.confidence ?? 0,
+          source: "seamless",
+          sourceContactId: f.contact.contactId,
+          contactCity: cand.city,
+          contactState: cand.state,
+          siteVsCorporate: siteVsCorporate(cand.city, cand.state, cand.companyCity, cand.companyState),
+        });
+        created.push({ id: contact.id, confidence: f.confidence, source: f });
+      } catch (err) {
+        // A concurrent run for the same signal already wrote this person: the unique key did its job.
+        if ((err as { code?: string }).code === "23505") {
+          log.warn({ hiringSignalId, sourceContactId: f.contact.contactId }, "contact already stored for this signal — skipping the duplicate");
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (created.length === 0) {
+      await recordAttempt("done", { message: "every researched contact was already stored for this signal" });
+      return { contactId: null, confidence: null, terminalStatus: "done", contactIds: [], researchSubmitted: picked.length };
+    }
+
+    // Primary = highest confidence (the same rule emit applies when it writes leads.primary_contact_id).
+    const ordered = [...created].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+    const primary = ordered[0];
+    requestId = primary.source.requestId;
+    searchResultId = primary.source.candidate.searchResultId;
 
     log.info(
       {
         hiringSignalId,
-        contactId: contact.id,
-        confidence,
-        hasPhone: !!contact.phone,
-        hasEmail: !!contact.email,
-        recoveredViaDuplicate,
+        contactIds: ordered.map((c) => c.id),
+        confidences: ordered.map((c) => c.confidence),
+        tiers: created.map((c) => tierOf(c.source.contact.title)),
+        contacts: created.length,
+        picked: picked.length,
+        recovered: created.filter((c) => c.source.recovered).length,
       },
-      "enrichment produced a contact",
+      "enrichment produced contacts",
     );
     await recordAttempt("done", {
-      contactId: contact.id,
-      confidence,
-      message: recoveredViaDuplicate ? "recovered via duplicate's initialRequestId" : null,
+      contactId: primary.id,
+      confidence: primary.confidence,
+      message: `${created.length} contact(s) of ${picked.length} researched${created.some((c) => c.source.recovered) ? `; ${created.filter((c) => c.source.recovered).length} recovered via duplicate's initialRequestId` : ""}`,
     });
 
-    return { contactId: contact.id, confidence, terminalStatus: "done" };
+    return {
+      contactId: primary.id,
+      confidence: primary.confidence,
+      contactIds: ordered.map((c) => c.id),
+      researchSubmitted: picked.length,
+      terminalStatus: "done",
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log.error({ hiringSignalId, err }, "enrichHiringSignal threw an unexpected error");

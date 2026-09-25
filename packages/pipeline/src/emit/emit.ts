@@ -9,6 +9,7 @@ import {
 } from "@fdl/db";
 import { CONTRACT_VERSION } from "@fdl/contracts";
 import { getDb } from "../db.js";
+import { assignPrimaryAndAlternates } from "../enrich/multiContact.js";
 
 const log = createLogger("emit");
 
@@ -34,15 +35,18 @@ export async function emitLead(
   // row, not create a duplicate. lead_assignments is the tenant-scoped join on top of it.
   let lead = await leads.findByHiringSignalId(hiringSignalId);
   if (!lead) {
-    const contact = await contacts.findByHiringSignalId(hiringSignalId);
-    if (!contact) throw new Error(`no contact for hiring_signal ${hiringSignalId} — scoring should have caught this`);
+    // The highest-confidence contact is the primary; the others, best first, are the alternates. One contact
+    // gives none, exactly as before multi-contact resolution.
+    const assigned = assignPrimaryAndAlternates(await contacts.listByHiringSignalId(hiringSignalId));
+    if (!assigned) throw new Error(`no contact for hiring_signal ${hiringSignalId} — scoring should have caught this`);
 
     lead = await leads.create({
       contractVersion: CONTRACT_VERSION,
       hiringSignalId,
-      primaryContactId: contact.id,
+      primaryContactId: assigned.primary.id,
+      alternateContactIds: assigned.alternates.map((c) => c.id),
     });
-    log.info({ hiringSignalId, leadId: lead.id }, "created lead");
+    log.info({ hiringSignalId, leadId: lead.id, alternates: assigned.alternates.length }, "created lead");
   } else {
     log.info({ hiringSignalId, leadId: lead.id }, "reusing existing lead for this signal");
   }
