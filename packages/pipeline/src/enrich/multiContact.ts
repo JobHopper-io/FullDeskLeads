@@ -14,16 +14,30 @@ export const HR_TITLES = ["HR Manager", "Human Resources Manager", "Talent Acqui
 
 export type ContactTier = "function" | "site" | "hr";
 
-/** Case-insensitive union, first spelling wins, order kept. */
-export function buildTitleTargets(functionTitles: string[]): string[] {
-  const seen = new Set<string>();
-  return [...functionTitles, ...SITE_LEAD_TITLES, ...HR_TITLES].filter((t) => {
-    const k = t.toLowerCase();
-    return seen.has(k) ? false : (seen.add(k), true);
-  });
+/** Best first. A lead's primary comes from the best tier that has anyone. */
+export const TIER_ORDER: ContactTier[] = ["function", "site", "hr"];
+
+/**
+ * What to search for in each tier: one search per tier, so a tier's own titles can't be crowded out of the top
+ * results by the generic ones (a single combined search returned 0 function-tier people for Crest's 11 picks).
+ * The function tier is the role family's own titles minus any that are really site-lead or HR titles (the
+ * production family lists "Plant Manager", say); a role with no family of its own has no function tier, so it
+ * costs no search. Case-insensitive, first spelling wins.
+ */
+export function buildTierTitles(functionTitles: string[]): Record<ContactTier, string[]> {
+  const claimed = new Set([...SITE_LEAD_TITLES, ...HR_TITLES].map((t) => t.toLowerCase()));
+  return {
+    function: functionTitles.filter((t, i, all) => !claimed.has(t.toLowerCase()) && all.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i),
+    site: SITE_LEAD_TITLES,
+    hr: HR_TITLES,
+  };
 }
 
-/** Which tier a *result's* title belongs to. Deliberately keyword-based: it names a role, it doesn't rank a person. */
+/**
+ * Keyword guess at a title's tier. Only a fallback now, for contacts written before the tier was stored (it's
+ * known exactly at search time, from which search found the person). It misjudges some titles, e.g. an "IT
+ * Operations Manager" reads as site lead.
+ */
 export function tierOf(title: string): ContactTier {
   if (/\b(hr|human resources|talent|recruit\w*|people (?:&|and)? ?culture)\b/i.test(title)) return "hr";
   if (/\b(plant manager|general manager|operations manager|site manager|director of operations|coo)\b/i.test(title)) return "site";
@@ -68,23 +82,27 @@ export function matchesCompany(r: SearchContactResult, ours: CompanyIdentity): E
   };
 }
 
+/** A search result plus the tier of the search that found it. */
+export type TieredResult = SearchContactResult & { tier: ContactTier };
+
 export interface Selection {
-  picked: SearchContactResult[];
-  rejected: { result: SearchContactResult; reason: string }[];
+  picked: TieredResult[];
+  rejected: { result: TieredResult; reason: string }[];
 }
 
 /**
- * Up to `max` candidates from one search's results (already in Seamless's relevance order): drop other companies'
- * people and repeats, then take the best-ranked from each tier (function, site lead, HR) so the set is different
- * roles, then fill any remaining slots by plain rank.
+ * Up to `max` candidates from the per-tier searches (each tier's results in Seamless's relevance order; pass the
+ * tiers best first, so a person found by several searches keeps their best tier): drop other companies' people
+ * and repeats, then take the best-ranked from each tier so the set is different roles, then fill the remaining
+ * slots tier by tier (function first), each in rank order.
  */
 export function selectCandidates(
-  results: SearchContactResult[],
+  results: TieredResult[],
   ours: CompanyIdentity,
   max = MAX_CONTACTS_PER_SIGNAL,
 ): Selection {
   const rejected: Selection["rejected"] = [];
-  const eligible: SearchContactResult[] = [];
+  const eligible: TieredResult[] = [];
   const seen = new Set<string>();
   for (const r of results) {
     if (!r.searchResultId || seen.has(r.searchResultId)) continue;
@@ -94,41 +112,35 @@ export function selectCandidates(
     else rejected.push({ result: r, reason: m.reason });
   }
 
-  const picked: SearchContactResult[] = [];
-  for (const tier of ["function", "site", "hr"] as const) {
-    const first = eligible.find((r) => !picked.includes(r) && tierOf(r.title) === tier);
+  const picked: TieredResult[] = [];
+  for (const tier of TIER_ORDER) {
+    const first = eligible.find((r) => r.tier === tier);
     if (first && picked.length < max) picked.push(first);
   }
-  for (const r of eligible) if (picked.length < max && !picked.includes(r)) picked.push(r);
+  for (const tier of TIER_ORDER) {
+    for (const r of eligible) if (r.tier === tier && picked.length < max && !picked.includes(r)) picked.push(r);
+  }
   return { picked, rejected };
 }
 
-const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
-
 /**
- * 'corporate' when the contact is in the company HQ's city and state, 'site' when both are known and differ,
- * null when any of the four is missing (unknown, never guessed).
- */
-export function siteVsCorporate(
-  contactCity: string | null,
-  contactState: string | null,
-  companyCity: string | null,
-  companyState: string | null,
-): "site" | "corporate" | null {
-  if (!norm(contactCity) || !norm(contactState) || !norm(companyCity) || !norm(companyState)) return null;
-  return norm(contactCity) === norm(companyCity) && norm(contactState) === norm(companyState) ? "corporate" : "site";
-}
-
-/**
- * The highest-confidence contact is the lead's primary; the rest, in descending confidence, are its alternates.
+ * A lead's primary is the highest-confidence contact within the best tier that has anyone (function, then site
+ * lead, then HR), not simply the highest confidence overall: confidence is how sure Seamless is of the phone, and
+ * on its own it promoted an HR manager over a function manager. The rest, in descending confidence, are the
+ * alternates. A contact's tier is the stored one, or the keyword guess for rows written before it was stored.
  * Input order breaks ties, so it should already be stable (the repository orders by confidence, created_at, id).
  * A single contact gives no alternates, exactly as before.
  */
-export function assignPrimaryAndAlternates<T extends { id: string; confidence_score: number }>(
+export function assignPrimaryAndAlternates<T extends { id: string; confidence_score: number; title: string; tier?: ContactTier | null }>(
   contacts: T[],
   maxAlternates = MAX_CONTACTS_PER_SIGNAL - 1,
 ): { primary: T; alternates: T[] } | null {
   if (contacts.length === 0) return null;
-  const ordered = contacts.map((c, i) => ({ c, i })).sort((a, b) => b.c.confidence_score - a.c.confidence_score || a.i - b.i).map((x) => x.c);
-  return { primary: ordered[0], alternates: ordered.slice(1, 1 + maxAlternates) };
+  const tierRank = (c: T) => TIER_ORDER.indexOf(c.tier ?? tierOf(c.title));
+  const best = Math.min(...contacts.map(tierRank));
+  const indexed = contacts.map((c, i) => ({ c, i }));
+  const byConfidence = (a: { c: T; i: number }, b: { c: T; i: number }) => b.c.confidence_score - a.c.confidence_score || a.i - b.i;
+  const primary = indexed.filter((x) => tierRank(x.c) === best).sort(byConfidence)[0].c;
+  const alternates = indexed.filter((x) => x.c !== primary).sort(byConfidence).map((x) => x.c).slice(0, maxAlternates);
+  return { primary, alternates };
 }

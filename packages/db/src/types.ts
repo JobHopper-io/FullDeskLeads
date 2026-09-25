@@ -108,6 +108,8 @@ export interface ContactRow {
   contact_state: string | null;
   /** 'corporate' = at the company's HQ city + state, 'site' = elsewhere, null = unknown. */
   site_vs_corporate: "site" | "corporate" | null;
+  /** Which per-tier search found this person (migration 0027); null on rows written before it existed. */
+  tier: "function" | "site" | "hr" | null;
 }
 
 export interface EnrichmentAttemptRow {

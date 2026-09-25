@@ -1,112 +1,119 @@
 import assert from "node:assert/strict";
 import {
-  assignPrimaryAndAlternates, buildTitleTargets, matchesCompany, selectCandidates, siteVsCorporate, tierOf,
+  assignPrimaryAndAlternates, buildTierTitles, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
 } from "../packages/pipeline/src/enrich/multiContact.js";
+import { distanceMiles, lookupPlace, siteVsCorporate } from "../packages/pipeline/src/enrich/geo.js";
 import type { SearchContactResult } from "../packages/enrichment/src/index.js";
 
 // Run: tsx scripts/check-multi-contact.ts   (no network, no database, spends nothing)
-// Fixtures are real Seamless search responses captured 2026-09-25 (names/titles/domains/cities as returned).
+// Marked REAL: values captured from real Seamless responses / the real run (2026-09-25). Marked SYNTHETIC: constructed to
+// exercise a rule, because the raw per-tier search results were not kept and can't be replayed without spending credits.
 const r = (id: string, name: string, title: string, domain: string, company: string, city: string, state: string, companyCity: string, companyState: string): SearchContactResult =>
   ({ searchResultId: id, name, title, domain, company, city, state, companyCity, companyState });
+const tiered = (rs: SearchContactResult[], tier: ContactTier): TieredResult[] => rs.map((x) => ({ ...x, tier }));
 
-// ── titles ──────────────────────────────────────────────────────────────────
-assert.deepEqual(buildTitleTargets(["Operations Manager", "General Manager", "HR Manager"]),
-  ["Operations Manager", "General Manager", "HR Manager", "Plant Manager", "Human Resources Manager", "Talent Acquisition Manager"]); // case-insensitive dedupe, order kept
-assert.equal(buildTitleTargets(["Maintenance Manager"]).length, 7);
-assert.equal(tierOf("Plant Manager"), "site");
-assert.equal(tierOf("Operations Manager"), "site");
-assert.equal(tierOf("HR Manager"), "hr");
-assert.equal(tierOf("Talent Acquisition Partner"), "hr");
-assert.equal(tierOf("Maintenance Manager"), "function");
-assert.equal(tierOf("Project Manager"), "function");
-assert.equal(tierOf("Facilities Manager"), "function");
+// ── one search per tier: what each tier searches for ────────────────────────
+const maint = buildTierTitles(["Maintenance Manager", "Maintenance Supervisor", "Facilities Manager"]);
+assert.deepEqual(maint.function, ["Maintenance Manager", "Maintenance Supervisor", "Facilities Manager"]);
+assert.deepEqual(maint.site, ["Plant Manager", "Operations Manager", "General Manager"]);
+assert.deepEqual(maint.hr, ["HR Manager", "Human Resources Manager", "Talent Acquisition Manager"]);
+// the production family lists "Plant Manager", which is a site-lead title: it's not searched twice
+assert.deepEqual(buildTierTitles(["Production Manager", "Production Supervisor", "Plant Manager"]).function, ["Production Manager", "Production Supervisor"]);
+assert.deepEqual(buildTierTitles(["plant manager", "Plant Manager", "Maintenance Manager"]).function, ["Maintenance Manager"]);
+// a role with no family of its own (the generic fallback) has no function tier, so no function search is paid for
+assert.deepEqual(buildTierTitles([]).function, []);
 
-// ── crestoperations.com: the two real results Seamless returned are Crest's OWN subsidiaries ─────────────────
-// (Beta Engineering and Millennium Galvanizing are named in Crest's postings' department field and confirmed
-// against independent sources). Real response captured 2026-09-25.
+// ── entity filter: REAL Crest results, Crest's nine aliases (migration 0025) ─
 const crest = [
   r("c1", "Mohammad Ghafar", "Maintenance Project Manager", "betaengineering.com", "Beta Engineering", "Amman", "Amman", "Pineville", "Louisiana"),
   r("c2", "Travis Rabalais", "Maintenance Manager", "millenniumgalvanizing.com", "Millennium Galvanizing", "Convent", "Louisiana", "Convent", "Louisiana"),
 ];
-// The nine aliases seeded by migration 0025. Migues Deloach and crestindustries.com are deliberately NOT in it.
 const CREST_ALIASES = ["DIS-TRAN Steel", "DIS-TRAN Packaged Substations", "Crest Natural Resources", "Crest Operations", "Crest Properties", "Beta Engineering", "Mid-State Supply", "Millennium Galvanizing", "Avant Organics"];
-const crestNoAlias = { domain: "crestoperations.com", companyName: "Crest Industries" };
-const crestWithAlias = { ...crestNoAlias, aliases: CREST_ALIASES };
-
-// Without aliases, both were falsely rejected (that is why aliases exist).
-assert.equal(selectCandidates(crest, crestNoAlias).picked.length, 0);
-// With them, both pass, by alias, and the match is reported so it's auditable.
-const crestSel = selectCandidates(crest, crestWithAlias);
-assert.deepEqual(crestSel.picked.map((x) => x.name), ["Mohammad Ghafar", "Travis Rabalais"]);
-assert.equal(crestSel.rejected.length, 0);
-const m1 = matchesCompany(crest[0], crestWithAlias), m2 = matchesCompany(crest[1], crestWithAlias);
-assert(m1.ok && m1.by === "alias" && m1.matched === "Beta Engineering");
-assert(m2.ok && m2.by === "alias" && m2.matched === "Millennium Galvanizing");
-// The rest of the confirmed brands, as Seamless might spell them (SYNTHETIC company strings: only Beta and Millennium were captured).
-for (const [company, expect] of [["Beta Engineering, Inc.", "Beta Engineering"], ["DIS-TRAN Steel, LLC", "DIS-TRAN Steel"], ["DIS-TRAN Packaged Substations", "DIS-TRAN Packaged Substations"], ["Mid-State Supply", "Mid-State Supply"], ["Avant Organics", "Avant Organics"], ["Crest Industries", "Crest Industries"]] as const) {
-  const m = matchesCompany(r("t", "T", "Plant Manager", "x.com", company, "a", "b", "c", "d"), crestWithAlias);
-  assert(m.ok && m.matched === expect, `${company} should match ${expect}`);
+const crestId = { domain: "crestoperations.com", companyName: "Crest Industries", aliases: CREST_ALIASES };
+assert.equal(selectCandidates(tiered(crest, "function"), { ...crestId, aliases: [] }).picked.length, 0);   // without aliases: falsely rejected
+const cs = selectCandidates(tiered(crest, "function"), crestId);
+assert.deepEqual(cs.picked.map((x) => x.name), ["Mohammad Ghafar", "Travis Rabalais"]);
+assert(matchesCompany(crest[0], crestId).ok && (matchesCompany(crest[0], crestId) as { by: string }).by === "alias");
+for (const company of ["Migues Deloach", "IEM", "AireSpring", "Andersen Windows"]) {
+  assert(!matchesCompany(r("t", "T", "Plant Manager", "x.com", company, "a", "b", "c", "d"), crestId).ok, `${company} must not match Crest`);
 }
-// The aliases don't open the door to unrelated companies: Migues Deloach (not a Crest brand), IEM, and Beta Engineering for a company that isn't Crest.
-for (const company of ["Migues Deloach", "Migues-Deloach General Contractors", "IEM", "AireSpring", "Andersen Windows"]) {
-  assert(!matchesCompany(r("t", "T", "Plant Manager", "x.com", company, "a", "b", "c", "d"), crestWithAlias).ok, `${company} must not match Crest`);
-}
-assert(!matchesCompany(crest[0], { domain: "iemfg.com", companyName: "Industrial Electric Manufacturing" }).ok); // no aliases on IEM: Beta is another company there
-// A missing alias list (migration not applied yet: the column isn't returned) behaves exactly like an empty one.
-assert.equal(selectCandidates(crest, { domain: "crestoperations.com", companyName: "Crest Industries", aliases: undefined }).picked.length, 0);
 
-// ── iemfg.com: real results, in the order returned, incl. 2 on iem.com (a different company). The company NAME
-// on those two ("IEM") is assumed: only their domain and titles were captured. ──
-const iem = (id: string, n: string, t: string, city: string, st: string, dom = "iemfg.com", co = "Industrial Electric Mfg.") =>
-  r(id, n, t, dom, co, city, st, dom === "iemfg.com" ? "Fremont" : "Morrisville", dom === "iemfg.com" ? "California" : "North Carolina");
-const iemResults = [
-  iem("i1", "Mike Sundstrom", "Plant Manager", "Fremont", "California"),
-  iem("i2", "Tony Perreira", "Plant Manager", "Fremont", "California"),
-  iem("i3", "Patrick Lau", "Plant Manager", "Langley", "British Columbia"),
-  iem("i4", "Jose Betancourt", "Production Manager", "Miami", "Florida"),
-  iem("i5", "Brian Poole", "Production lead-mechanical", "Jacksonville", "Florida"),
-  iem("i6", "Keith Okoniewski", "Production Supervisor", "Coleman", "Michigan", "iem.com", "IEM"),
-  iem("i7", "Eun Hee", "Scheduling and Production Control Supervisor", "Vancouver", "British Columbia"),
-  iem("i8", "Doug Dickson", "Production Manager", "Pensacola", "Florida", "iem.com", "IEM"),
-];
-const iemSel = selectCandidates(iemResults, { domain: "iemfg.com", companyName: "Industrial Electric Manufacturing" });
-assert.deepEqual(iemSel.rejected.map((x) => x.result.name), ["Keith Okoniewski", "Doug Dickson"]);       // the iem.com people are out
-// one per tier first (function: Jose; site: Mike; hr: none available), then by rank: Tony, Patrick. Max 4.
-assert.deepEqual(iemSel.picked.map((x) => x.name), ["Jose Betancourt", "Mike Sundstrom", "Tony Perreira", "Patrick Lau"]);
-assert(matchesCompany(iemResults[0], { domain: "www.IEMFG.com", companyName: "x" }).ok);                  // domain compare ignores case and www.
+// ── REAL: Gerald Laming, "Renewal by Andersen" (renewalbyandersen.com), dropped x3 in the run at similarity 0.45 ──
+const laming = r("a1", "Gerald Laming", "Regional Sales Manager", "renewalbyandersen.com", "Renewal by Andersen", "Cottage Grove", "Minnesota", "Cottage Grove", "Minnesota");
+const andersen = { domain: "andersencorp.com", companyName: "Andersen Corporation" };
+const before = matchesCompany(laming, andersen);
+assert(!before.ok && before.reason.includes("0.45"), "without the alias: rejected at 0.45, as in the real run");
+const after = matchesCompany(laming, { ...andersen, aliases: ["Renewal by Andersen"] });   // migration 0026
+assert(after.ok && after.by === "alias" && after.matched === "Renewal by Andersen");
+assert(!matchesCompany(r("t", "T", "x", "x.com", "Migues Deloach", "a", "b", "c", "d"), { ...andersen, aliases: ["Renewal by Andersen"] }).ok); // the alias opens nothing else
 
-// ── spawglass.com: real results were ten Project Managers — all one tier, so plain rank, capped at 4 ──
-const sg = ["Michael Rapstine", "Seth Madison", "Parker Blaschke", "Matt Mazurek", "Daniel Ballin", "Justin Cox"]
-  .map((n, i) => r(`s${i}`, n, i % 2 ? "Project Manager" : "Senior Project Manager", "spawglass.com", "SpawGlass", "Austin", "Texas", "Selma", "Texas"));
-const sgSel = selectCandidates(sg, { domain: "spawglass.com", companyName: "SpawGlass" });
-assert.deepEqual(sgSel.picked.map((x) => x.name), ["Michael Rapstine", "Seth Madison", "Parker Blaschke", "Matt Mazurek"]);
-assert.equal(selectCandidates(sg, { domain: "spawglass.com", companyName: "SpawGlass" }, 2).picked.length, 2);
+// ── tiered selection (SYNTHETIC per-tier results) ───────────────────────────
+const acme = (id: string, name: string, title: string) => r(id, name, title, "acme.com", "Acme", "Tulsa", "Oklahoma", "Tulsa", "Oklahoma");
+const ours = { domain: "acme.com", companyName: "Acme" };
+const fn = tiered([acme("f1", "F1", "Maintenance Manager"), acme("f2", "F2", "Maintenance Supervisor"), acme("f3", "F3", "Facilities Manager")], "function");
+const site = tiered([acme("s1", "S1", "Plant Manager"), acme("s2", "S2", "General Manager")], "site");
+const hr = tiered([acme("h1", "H1", "HR Manager"), acme("h2", "H2", "Talent Manager")], "hr");
+// one per tier first (F1, S1, H1), then the 4th slot goes to the best tier with anyone left (function): F2
+assert.deepEqual(selectCandidates([...fn, ...site, ...hr], ours).picked.map((x) => x.name), ["F1", "S1", "H1", "F2"]);
+// no function tier at all (a role with no family): site, HR, then site again
+assert.deepEqual(selectCandidates([...site, ...hr], ours).picked.map((x) => x.name), ["S1", "H1", "S2", "H2"]);
+// the function search found nobody: still 4 from the other tiers, never empty-handed
+assert.equal(selectCandidates([...tiered([], "function"), ...site, ...hr], ours).picked.length, 4);
+// the same person found by two searches keeps the earlier (better) tier and counts once
+const dup = selectCandidates([...fn, ...tiered([acme("f1", "F1", "Maintenance Manager")], "site"), ...hr], ours);
+assert.equal(dup.picked.filter((x) => x.name === "F1").length, 1);
+assert.equal(dup.picked.find((x) => x.name === "F1")!.tier, "function");
+assert.equal(selectCandidates([...fn, ...site, ...hr], ours, 2).picked.length, 2);
+// other companies' people are dropped from every tier
+const stray = tiered([r("z1", "Z", "Plant Manager", "other.com", "Other Co", "a", "b", "c", "d")], "site");
+assert.equal(selectCandidates([...stray, ...site], ours).rejected.length, 1);
 
-// ── SYNTHETIC (no real result had an HR title): the HR tier is reached ahead of lower-ranked repeats ──
-const mix = [
-  r("m1", "A", "Maintenance Manager", "acme.com", "Acme", "Tulsa", "Oklahoma", "Tulsa", "Oklahoma"),
-  r("m2", "B", "Maintenance Supervisor", "acme.com", "Acme", "Tulsa", "Oklahoma", "Tulsa", "Oklahoma"),
-  r("m3", "C", "Facilities Manager", "acme.com", "Acme", "Tulsa", "Oklahoma", "Tulsa", "Oklahoma"),
-  r("m4", "D", "Plant Manager", "acme.com", "Acme", "Tulsa", "Oklahoma", "Tulsa", "Oklahoma"),
-  r("m5", "E", "HR Manager", "acme.com", "Acme", "Tulsa", "Oklahoma", "Tulsa", "Oklahoma"),
-];
-assert.deepEqual(selectCandidates(mix, { domain: "acme.com", companyName: "Acme" }).picked.map((x) => x.name), ["A", "D", "E", "B"]);
-assert.equal(selectCandidates([...mix, mix[0]], { domain: "acme.com", companyName: "Acme" }).picked.length, 4); // a repeated searchResultId never counts twice
-
-// ── site vs corporate ───────────────────────────────────────────────────────
-assert.equal(siteVsCorporate("Boerne", "Texas", "Selma", "Texas"), "site");          // SpawGlass contact vs Selma HQ (real)
-assert.equal(siteVsCorporate("Fremont", "California", "Fremont", "California"), "corporate"); // IEM at HQ (real)
-assert.equal(siteVsCorporate(" fremont ", "CALIFORNIA", "Fremont", "California"), "corporate"); // case/space-insensitive
-assert.equal(siteVsCorporate("Springfield", "Illinois", "Springfield", "Missouri"), "site"); // same city name, different state
-assert.equal(siteVsCorporate(null, "Texas", "Selma", "Texas"), null);                // missing = unknown, not guessed
-assert.equal(siteVsCorporate("Austin", "Texas", "Selma", null), null);
-
-// ── primary / alternates ────────────────────────────────────────────────────
-const c = (id: string, conf: number) => ({ id, confidence_score: conf });
-const a = assignPrimaryAndAlternates([c("x", 0.86), c("y", 0.99), c("z", 0.9), c("w", 0.9), c("v", 0.5)])!;
-assert.equal(a.primary.id, "y");                                                       // highest confidence
-assert.deepEqual(a.alternates.map((x) => x.id), ["z", "w", "x"]);                      // descending, ties keep input order, capped at 3
-assert.deepEqual(assignPrimaryAndAlternates([c("only", 0.9)])!.alternates, []);        // single contact: no alternates, as today
+// ── primary = highest confidence within the best available tier ─────────────
+const c = (id: string, conf: number, title: string, tier: ContactTier | null) => ({ id, confidence_score: conf, title, tier });
+// function beats a higher-confidence site or HR person
+let a = assignPrimaryAndAlternates([c("hr", 0.99, "HR Manager", "hr"), c("site", 0.98, "Plant Manager", "site"), c("fn", 0.9, "Maintenance Manager", "function")])!;
+assert.equal(a.primary.id, "fn");
+assert.deepEqual(a.alternates.map((x) => x.id), ["hr", "site"]);           // alternates: descending confidence, as before
+// no function tier: the best is site lead, even under a higher-confidence HR person (the real Crest case: Sarah Ceballos 0.99 was HR)
+a = assignPrimaryAndAlternates([c("sarah", 0.99, "Human Resources Manager", "hr"), c("matt", 0.98, "Operations Manager", "site"), c("mad", 0.92, "Talent Manager", "hr"), c("emily", 0.92, "Operations Manager", "site")])!;
+assert.equal(a.primary.id, "matt");
+// within the best tier the highest confidence wins, ties keep input order
+assert.equal(assignPrimaryAndAlternates([c("x", 0.9, "Maintenance Manager", "function"), c("y", 0.95, "Facilities Manager", "function"), c("z", 0.95, "Maintenance Supervisor", "function")])!.primary.id, "y");
+// only HR available: HR
+assert.equal(assignPrimaryAndAlternates([c("h", 0.7, "HR Manager", "hr")])!.primary.id, "h");
+// the stored tier beats the title guess, and a missing tier falls back to the guess
+assert.equal(assignPrimaryAndAlternates([c("a", 0.9, "Operations Manager", "function"), c("b", 0.99, "Plant Manager", "site")])!.primary.id, "a");
+assert.equal(assignPrimaryAndAlternates([c("a", 0.9, "Maintenance Manager", null), c("b", 0.99, "Plant Manager", null)])!.primary.id, "a");
+assert.equal(tierOf("HR Manager"), "hr");
+// alternates capped at 3; a single contact gives none, as today; none gives null
+assert.equal(assignPrimaryAndAlternates([1, 2, 3, 4, 5, 6].map((i) => c(`p${i}`, 0.9 - i / 100, "Maintenance Manager", "function")))!.alternates.length, 3);
+assert.deepEqual(assignPrimaryAndAlternates([c("only", 0.9, "Maintenance Manager", "function")])!.alternates, []);
 assert.equal(assignPrimaryAndAlternates([]), null);
+
+// ── site vs corporate: real distance ────────────────────────────────────────
+const mi = (c1: string, s1: string, c2: string, s2: string) => distanceMiles(lookupPlace(c1, s1)!, lookupPlace(c2, s2)!);
+const near = (x: number, want: number, tol: number) => assert(Math.abs(x - want) <= tol, `${x} not within ${tol} of ${want}`);
+near(mi("Alexandria", "Louisiana", "Pineville", "Louisiana"), 5.0, 0.5);        // the confirmed real case: one metro
+near(mi("Stillwater", "Minnesota", "Bayport", "Minnesota"), 3.9, 0.5);
+near(mi("Cottage Grove", "Minnesota", "Bayport", "Minnesota"), 15.4, 0.5);
+near(mi("Minneapolis", "Minnesota", "Bayport", "Minnesota"), 24.2, 0.5);        // just inside 25: threshold-sensitive
+near(mi("Austin", "Texas", "Selma", "Texas"), 59.6, 1);
+near(mi("Houston", "Texas", "Pineville", "Louisiana"), 207.4, 2);               // across a state line
+assert.equal(lookupPlace("Alexandria", "LA")?.lat, lookupPlace("alexandria", "Louisiana")?.lat);   // state name or abbreviation, any case
+assert.deepEqual(lookupPlace("St. Paul", "Minnesota"), lookupPlace("Saint Paul", "MN"));           // St. == Saint
+assert.equal(lookupPlace("Alexandria", "Minnesota")!.lat.toFixed(1), "45.9");                       // same name, other state: not confused
+assert.equal(lookupPlace("Langley", "British Columbia"), null);                                     // non-US: unlocatable
+assert.equal(siteVsCorporate("Alexandria", "Louisiana", "Pineville", "Louisiana"), "corporate");    // was 'site' under exact comparison
+assert.equal(siteVsCorporate("Pineville", "Louisiana", "Pineville", "Louisiana"), "corporate");
+assert.equal(siteVsCorporate("Stillwater", "Minnesota", "Bayport", "Minnesota"), "corporate");
+assert.equal(siteVsCorporate("Austin", "Texas", "Selma", "Texas"), "site");                          // same state, 60 miles: still 'site' (a same-state rule would say corporate)
+assert.equal(siteVsCorporate("Houston", "Texas", "Pineville", "Louisiana"), "site");
+assert.equal(siteVsCorporate("Minneapolis", "Minnesota", "Bayport", "Minnesota"), "corporate");
+assert.equal(siteVsCorporate("Minneapolis", "Minnesota", "Bayport", "Minnesota", 20), "site");       // the radius is a parameter
+assert.equal(siteVsCorporate("Langley", "British Columbia", "Fremont", "California"), "site");        // unlocatable: exact-comparison fallback
+assert.equal(siteVsCorporate("Amman", "Amman", "Pineville", "Louisiana"), "site");
+assert.equal(siteVsCorporate(" fremont ", "CALIFORNIA", "Fremont", "California"), "corporate");
+assert.equal(siteVsCorporate(null, "Texas", "Selma", "Texas"), null);                                // missing = unknown, never guessed
+assert.equal(siteVsCorporate("Austin", "Texas", "Selma", null), null);
 
 console.log("multi-contact checks passed");

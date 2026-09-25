@@ -63,12 +63,14 @@ let processed = 0;
 let contactsFound = 0;
 let contactsWritten = 0;
 let researchSubmitted = 0;
+let searchesRun = 0;
 const contactCountBySignal = new Map<number, number>();
 let researchCallsMade = 0;
 
 async function runOne(hiringSignalId: string): Promise<void> {
   try {
-    const { contactId, terminalStatus, contactIds, researchSubmitted: submitted } = await enrichHiringSignal(hiringSignalId);
+    const { contactId, terminalStatus, contactIds, researchSubmitted: submitted, searchesRun: searched } = await enrichHiringSignal(hiringSignalId);
+    searchesRun += searched ?? 0;
     const n = contactIds?.length ?? (contactId ? 1 : 0);
     contactsWritten += n;
     researchSubmitted += submitted ?? 0;
@@ -120,6 +122,7 @@ Signals with a contact (done):  ${contactsFound}
 Contacts written in total:      ${contactsWritten}
 Contacts per signal:            ${[...contactCountBySignal.entries()].sort((a, b) => a[0] - b[0]).map(([n, c]) => `${n}: ${c}`).join("   ")}
 Signals with 2+ contacts:       ${[...contactCountBySignal.entries()].filter(([n]) => n >= 2).reduce((a, [, c]) => a + c, 0)} of ${processed}
+Searches paid for (1 credit):    ${searchesRun}  (identical searches at the same company are shared within a run)
 Contacts sent to research:      ${researchSubmitted}
 No contact found:               ${processed - contactsFound}
 Research requests submitted:    ${researchCallsMade}  (a request count, not confirmed billed credits — see below)

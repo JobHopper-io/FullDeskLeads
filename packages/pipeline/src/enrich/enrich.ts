@@ -2,7 +2,8 @@ import { createLogger } from "@fdl/shared";
 import { companyRepository, contactRepository, enrichmentAttemptRepository, hiringSignalRepository } from "@fdl/db";
 import { SeamlessClient, SeamlessPollTimeoutError, type PollResult } from "@fdl/enrichment";
 import { getDb } from "../db.js";
-import { MAX_CONTACTS_PER_SIGNAL, buildTitleTargets, selectCandidates, siteVsCorporate, tierOf } from "./multiContact.js";
+import { TIER_ORDER, buildTierTitles, selectCandidates, type TieredResult } from "./multiContact.js";
+import { siteVsCorporate } from "./geo.js";
 
 const log = createLogger("enrich");
 
@@ -70,7 +71,27 @@ export function deriveJobTitleHints(roleTitle: string): string[] {
   if (title.includes("accounting") || title.includes("finance") || title.includes("account")) {
     return ["Controller", "Finance Director", "CFO"];
   }
-  return ["Operations Manager", "General Manager", "HR Manager"];
+  return [...GENERIC_FALLBACK_TITLES];
+}
+
+// What a role with no family of its own gets. These are the site-lead and HR titles, not a function's own, so
+// such a role has no function tier to search (see buildTierTitles).
+const GENERIC_FALLBACK_TITLES = ["Operations Manager", "General Manager", "HR Manager"];
+const isGenericFallback = (hints: string[]) => hints.length === GENERIC_FALLBACK_TITLES.length && hints.every((t, i) => t === GENERIC_FALLBACK_TITLES[i]);
+
+// Identical searches (same company domain, same titles) return the same people, and two of the three tier searches
+// never vary by role: every signal at a company runs the same site-lead and HR searches. Each search costs 1 credit,
+// so identical ones are shared, in flight or recent (in this process only). `fresh` says whether this call paid.
+const SEARCH_CACHE_MS = 15 * 60 * 1000;
+const searchCache = new Map<string, { at: number; results: ReturnType<typeof client.searchContacts> }>();
+function searchOnce(domain: string, titles: string[]): { results: ReturnType<typeof client.searchContacts>; fresh: boolean } {
+  const key = `${domain.toLowerCase()}|${titles.map((t) => t.toLowerCase()).sort().join(",")}`;
+  const hit = searchCache.get(key);
+  if (hit && Date.now() - hit.at < SEARCH_CACHE_MS) return { results: hit.results, fresh: false };
+  const results = client.searchContacts(domain, titles);
+  searchCache.set(key, { at: Date.now(), results });
+  results.catch(() => searchCache.delete(key)); // a failed search must not be served to the next signal
+  return { results, fresh: true };
 }
 
 /** "98%" -> 0.98. Null when Seamless didn't return a confidence figure at all. */
@@ -89,6 +110,8 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
   // (each is 1 credit unless Seamless already had it), so a run can report hit rate and spend.
   contactIds?: string[];
   researchSubmitted?: number;
+  /** Searches this call actually paid for (1 credit each); a search shared from an identical recent one isn't counted. */
+  searchesRun?: number;
   // Extra beyond the base contract, additive only: lets run-enrichment.ts break its summary down
   // by outcome (done/error/missing/credits-exhausted/no-domain/...) without re-deriving it.
   terminalStatus?: string;
@@ -113,6 +136,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
 
   let searchResultId: string | null = null;
   let requestId: string | null = null;
+  let searchesRun = 0;
 
   // Everything below is wrapped so that no call into this function can ever leave a gap in
   // enrichment_attempts — rate-limit exhaustion, or any other unexpected exception, gets
@@ -135,18 +159,29 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       return { contactId: null, confidence: null, terminalStatus: "no-domain" };
     }
 
-    // One search (1 credit) over three tiers of title (the role family's own, site leadership, HR), then up to
-    // MAX_CONTACTS_PER_SIGNAL distinct people from it, at most one per tier before any tier repeats.
-    const jobTitleHints = buildTitleTargets(deriveJobTitleHints(hiringSignal.role_title));
-    const searchResults = await client.searchContacts(company.domain, jobTitleHints);
+    // One search per tier (function, site lead, HR), so a tier's own titles can't be crowded out of the top results
+    // by generic ones. A role with no family of its own has no function tier. Each person keeps the tier of the
+    // (best) search that found them, and up to MAX_CONTACTS_PER_SIGNAL are picked across the tiers.
+    const familyHints = deriveJobTitleHints(hiringSignal.role_title);
+    const tierTitles = buildTierTitles(isGenericFallback(familyHints) ? [] : familyHints);
+    const tiers = TIER_ORDER.filter((t) => tierTitles[t].length > 0);
+    const searched = await Promise.all(
+      tiers.map(async (tier) => {
+        const { results, fresh } = searchOnce(company.domain!, tierTitles[tier]);
+        return { tier, fresh, results: await results };
+      }),
+    );
+    searchesRun = searched.filter((x) => x.fresh).length;
+    const searchResults: TieredResult[] = searched.flatMap((x) => x.results.map((r) => ({ ...r, tier: x.tier })));
     if (searchResults.length === 0) {
-      log.info({ hiringSignalId, domain: company.domain, jobTitleHints }, "seamless search returned no candidates");
+      log.info({ hiringSignalId, domain: company.domain, tierTitles }, "seamless search returned no candidates");
       await recordAttempt("no-search-results");
-      return { contactId: null, confidence: null, terminalStatus: "no-search-results" };
+      return { contactId: null, confidence: null, terminalStatus: "no-search-results", searchesRun };
     }
 
     // Seamless returns other companies' people when the domain filter has no exact hit, so anyone who isn't
-    // this company's (by domain or company name) is dropped before a single research credit is spent on them.
+    // this company's (by domain, or by company name against its name and confirmed aliases) is dropped before a
+    // single research credit is spent on them.
     const { picked, rejected } = selectCandidates(searchResults, {
       domain: company.domain,
       companyName: company.name,
@@ -162,7 +197,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       await recordAttempt("no-matching-company", {
         message: `${searchResults.length} search result(s), none from this company (${rejected[0]?.reason ?? "n/a"})`,
       });
-      return { contactId: null, confidence: null, terminalStatus: "no-matching-company" };
+      return { contactId: null, confidence: null, terminalStatus: "no-matching-company", searchesRun };
     }
 
     // Research every picked person in one request. Seamless returns one requestId per id submitted, in order.
@@ -248,7 +283,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       // status is the first failure's.
       const status = failures[0] ?? "no-result";
       await recordAttempt(status, { message: failures.length > 1 ? `all ${failures.length} researched contacts failed: ${failures.join(", ")}` : null });
-      return { contactId: null, confidence: null, terminalStatus: status, researchSubmitted: picked.length };
+      return { contactId: null, confidence: null, terminalStatus: status, researchSubmitted: picked.length, searchesRun };
     }
 
     const created: { id: string; confidence: number | null; source: Found }[] = [];
@@ -268,6 +303,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
           contactCity: cand.city,
           contactState: cand.state,
           siteVsCorporate: siteVsCorporate(cand.city, cand.state, cand.companyCity, cand.companyState),
+          tier: cand.tier,
         });
         created.push({ id: contact.id, confidence: f.confidence, source: f });
       } catch (err) {
@@ -281,7 +317,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
     }
     if (created.length === 0) {
       await recordAttempt("done", { message: "every researched contact was already stored for this signal" });
-      return { contactId: null, confidence: null, terminalStatus: "done", contactIds: [], researchSubmitted: picked.length };
+      return { contactId: null, confidence: null, terminalStatus: "done", contactIds: [], researchSubmitted: picked.length, searchesRun };
     }
 
     // Primary = highest confidence (the same rule emit applies when it writes leads.primary_contact_id).
@@ -295,7 +331,8 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
         hiringSignalId,
         contactIds: ordered.map((c) => c.id),
         confidences: ordered.map((c) => c.confidence),
-        tiers: created.map((c) => tierOf(c.source.contact.title)),
+        tiers: created.map((c) => c.source.candidate.tier),
+        searchesRun,
         contacts: created.length,
         picked: picked.length,
         recovered: created.filter((c) => c.source.recovered).length,
@@ -313,6 +350,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       confidence: primary.confidence,
       contactIds: ordered.map((c) => c.id),
       researchSubmitted: picked.length,
+      searchesRun,
       terminalStatus: "done",
     };
   } catch (err) {
