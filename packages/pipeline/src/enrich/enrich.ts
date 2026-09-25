@@ -147,7 +147,11 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
 
     // Seamless returns other companies' people when the domain filter has no exact hit, so anyone who isn't
     // this company's (by domain or company name) is dropped before a single research credit is spent on them.
-    const { picked, rejected } = selectCandidates(searchResults, { domain: company.domain, companyName: company.name });
+    const { picked, rejected } = selectCandidates(searchResults, {
+      domain: company.domain,
+      companyName: company.name,
+      aliases: company.aliases,
+    });
     if (rejected.length > 0) {
       log.info(
         { hiringSignalId, domain: company.domain, rejected: rejected.map((x) => `${x.result.name}: ${x.reason}`) },

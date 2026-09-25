@@ -45,6 +45,8 @@ export interface CompanyRow {
   revenue_band: CompanyRevenueBand | null;
   hq_location: string | null;
   ownership_type: CompanyOwnershipType | null;
+  /** Brand names the company operates under (migration 0025); empty unless confirmed, e.g. Crest's subsidiaries. */
+  aliases: string[];
   created_at: string;
   updated_at: string;
 }

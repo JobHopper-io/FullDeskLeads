@@ -32,22 +32,40 @@ export function tierOf(title: string): ContactTier {
 
 const normDomain = (d: string | null | undefined) => (d ?? "").trim().toLowerCase().replace(/^www\./, "");
 
-export type EntityMatch = { ok: true; by: "domain" | "name" } | { ok: false; reason: string };
+export type EntityMatch = { ok: true; by: "domain" | "name" | "alias"; matched?: string } | { ok: false; reason: string };
+
+/** Who we're looking for: the company's own domain and name, plus the brand names it operates under (companies.aliases). */
+export interface CompanyIdentity {
+  domain: string;
+  companyName: string;
+  aliases?: string[];
+}
 
 /**
- * Is this search result really a person at *our* company? Seamless returns people from other companies when
- * the domain filter has no exact hit (confirmed: crestoperations.com returned Beta Engineering and Millennium
- * Galvanizing; iemfg.com returned two people on iem.com). Accept on the exact domain, or else on a company name
- * similar enough by the same measure already used for company matching (verifyCompanyEntity's threshold).
+ * Is this search result really a person at *our* company? Seamless returns people from other companies when the
+ * domain filter has no exact hit (confirmed: iemfg.com returned two people on iem.com, and airespring.com contacts
+ * are already stored for IEM). But a company can be a group: 21 of Crest's 24 stored contacts are on subsidiary
+ * brands' domains (Beta Engineering, Millennium Galvanizing...), which are Crest's own people. So a result passes
+ * on the exact domain, or on its company name being similar enough (the verifyCompanyEntity measure and threshold)
+ * to the company's name or to any confirmed alias. Names only: no domain list per brand is needed.
  */
-export function matchesCompany(r: SearchContactResult, ours: { domain: string; companyName: string }): EntityMatch {
+export function matchesCompany(r: SearchContactResult, ours: CompanyIdentity): EntityMatch {
   if (normDomain(r.domain) === normDomain(ours.domain)) return { ok: true, by: "domain" };
-  if (r.company) {
-    const similarity = companyNameSimilarity(ours.companyName, r.company);
-    if (similarity >= COMPANY_NAME_SIMILARITY_THRESHOLD) return { ok: true, by: "name" };
-    return { ok: false, reason: `other company: ${r.company} (${r.domain ?? "no domain"}), name similarity ${similarity.toFixed(2)}` };
+  if (!r.company) return { ok: false, reason: `no domain match (${r.domain ?? "none"}) and no company name to compare` };
+
+  const known = [ours.companyName, ...(ours.aliases ?? [])];
+  let best = { name: ours.companyName, similarity: 0 };
+  for (const name of known) {
+    const similarity = companyNameSimilarity(name, r.company);
+    if (similarity > best.similarity) best = { name, similarity };
   }
-  return { ok: false, reason: `no domain match (${r.domain ?? "none"}) and no company name to compare` };
+  if (best.similarity >= COMPANY_NAME_SIMILARITY_THRESHOLD) {
+    return { ok: true, by: best.name === ours.companyName ? "name" : "alias", matched: best.name };
+  }
+  return {
+    ok: false,
+    reason: `other company: ${r.company} (${r.domain ?? "no domain"}), best name similarity ${best.similarity.toFixed(2)} against ${known.length} known name(s)`,
+  };
 }
 
 export interface Selection {
@@ -62,7 +80,7 @@ export interface Selection {
  */
 export function selectCandidates(
   results: SearchContactResult[],
-  ours: { domain: string; companyName: string },
+  ours: CompanyIdentity,
   max = MAX_CONTACTS_PER_SIGNAL,
 ): Selection {
   const rejected: Selection["rejected"] = [];

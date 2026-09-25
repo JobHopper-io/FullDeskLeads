@@ -21,15 +21,39 @@ assert.equal(tierOf("Maintenance Manager"), "function");
 assert.equal(tierOf("Project Manager"), "function");
 assert.equal(tierOf("Facilities Manager"), "function");
 
-// ── crestoperations.com: real results were two OTHER companies ──────────────
+// ── crestoperations.com: the two real results Seamless returned are Crest's OWN subsidiaries ─────────────────
+// (Beta Engineering and Millennium Galvanizing are named in Crest's postings' department field and confirmed
+// against independent sources). Real response captured 2026-09-25.
 const crest = [
   r("c1", "Mohammad Ghafar", "Maintenance Project Manager", "betaengineering.com", "Beta Engineering", "Amman", "Amman", "Pineville", "Louisiana"),
   r("c2", "Travis Rabalais", "Maintenance Manager", "millenniumgalvanizing.com", "Millennium Galvanizing", "Convent", "Louisiana", "Convent", "Louisiana"),
 ];
-const crestSel = selectCandidates(crest, { domain: "crestoperations.com", companyName: "Crest Industries" });
-assert.equal(crestSel.picked.length, 0);
-assert.equal(crestSel.rejected.length, 2);
-assert(crestSel.rejected[0].reason.includes("Beta Engineering"));
+// The nine aliases seeded by migration 0025. Migues Deloach and crestindustries.com are deliberately NOT in it.
+const CREST_ALIASES = ["DIS-TRAN Steel", "DIS-TRAN Packaged Substations", "Crest Natural Resources", "Crest Operations", "Crest Properties", "Beta Engineering", "Mid-State Supply", "Millennium Galvanizing", "Avant Organics"];
+const crestNoAlias = { domain: "crestoperations.com", companyName: "Crest Industries" };
+const crestWithAlias = { ...crestNoAlias, aliases: CREST_ALIASES };
+
+// Without aliases, both were falsely rejected (that is why aliases exist).
+assert.equal(selectCandidates(crest, crestNoAlias).picked.length, 0);
+// With them, both pass, by alias, and the match is reported so it's auditable.
+const crestSel = selectCandidates(crest, crestWithAlias);
+assert.deepEqual(crestSel.picked.map((x) => x.name), ["Mohammad Ghafar", "Travis Rabalais"]);
+assert.equal(crestSel.rejected.length, 0);
+const m1 = matchesCompany(crest[0], crestWithAlias), m2 = matchesCompany(crest[1], crestWithAlias);
+assert(m1.ok && m1.by === "alias" && m1.matched === "Beta Engineering");
+assert(m2.ok && m2.by === "alias" && m2.matched === "Millennium Galvanizing");
+// The rest of the confirmed brands, as Seamless might spell them (SYNTHETIC company strings: only Beta and Millennium were captured).
+for (const [company, expect] of [["Beta Engineering, Inc.", "Beta Engineering"], ["DIS-TRAN Steel, LLC", "DIS-TRAN Steel"], ["DIS-TRAN Packaged Substations", "DIS-TRAN Packaged Substations"], ["Mid-State Supply", "Mid-State Supply"], ["Avant Organics", "Avant Organics"], ["Crest Industries", "Crest Industries"]] as const) {
+  const m = matchesCompany(r("t", "T", "Plant Manager", "x.com", company, "a", "b", "c", "d"), crestWithAlias);
+  assert(m.ok && m.matched === expect, `${company} should match ${expect}`);
+}
+// The aliases don't open the door to unrelated companies: Migues Deloach (not a Crest brand), IEM, and Beta Engineering for a company that isn't Crest.
+for (const company of ["Migues Deloach", "Migues-Deloach General Contractors", "IEM", "AireSpring", "Andersen Windows"]) {
+  assert(!matchesCompany(r("t", "T", "Plant Manager", "x.com", company, "a", "b", "c", "d"), crestWithAlias).ok, `${company} must not match Crest`);
+}
+assert(!matchesCompany(crest[0], { domain: "iemfg.com", companyName: "Industrial Electric Manufacturing" }).ok); // no aliases on IEM: Beta is another company there
+// A missing alias list (migration not applied yet: the column isn't returned) behaves exactly like an empty one.
+assert.equal(selectCandidates(crest, { domain: "crestoperations.com", companyName: "Crest Industries", aliases: undefined }).picked.length, 0);
 
 // ── iemfg.com: real results, in the order returned, incl. 2 on iem.com (a different company). The company NAME
 // on those two ("IEM") is assumed: only their domain and titles were captured. ──
