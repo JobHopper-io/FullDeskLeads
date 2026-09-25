@@ -35,34 +35,13 @@ strong, b, th { font-weight: 500; }
 .account { margin-top: auto; padding: 16px 12px 0; border-top: 1px solid var(--sidebar-line); display: grid; gap: 4px; justify-items: start; font-size: 0.8125rem; }
 .account-email { overflow-wrap: anywhere; opacity: 0.9; }
 .account-role { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); opacity: 0.6; margin-bottom: 8px; }
-.account .link-button, .account-pop .link-button { opacity: 0.85; }
-.account-menu { display: none; }
+.account .link-button { opacity: 0.85; }
 .main { min-width: 0; }
 .app-notice { margin: 20px 48px 0; }
 /* Above My Day, the notice lines up with the centred block rather than the page edge. */
 .app-notice:has(+ .my-day) { max-width: var(--my-day-w); margin: 20px auto 0; padding: 0 48px; }
 
-/* Phone: the sidebar becomes a slim top bar (wordmark + account menu, then a scrolling nav row). */
-@media (max-width: 800px) {
-  .app { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { position: static; height: auto; padding: 10px 12px 6px; display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 6px; }
-  .wordmark { padding: 4px; }
-  .wordmark img { width: 130px; }
-  .account { display: none; }
-  .account-menu { display: block; position: relative; font-size: 0.8125rem; }
-  .account-menu summary { list-style: none; cursor: pointer; padding: 4px 10px; border: 1px solid var(--sidebar-line); border-radius: var(--fdl-radius); }
-  .account-menu summary::-webkit-details-marker { display: none; }
-  .account-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: max-content; max-width: 70vw; background: var(--fdl-green); border: 1px solid var(--sidebar-line); border-radius: var(--fdl-radius); padding: 12px; display: grid; gap: 4px; justify-items: start; }
-  .app-nav { grid-column: 1 / -1; flex-direction: row; overflow-x: auto; margin: 0 -12px; padding: 0 8px; scrollbar-width: none; }
-  .app-nav a { padding: 8px 10px; font-size: 0.875rem; }
-  .app-nav a.active { box-shadow: inset 0 -2px 0 var(--fdl-ivory); background: none; }
-  .app-nav .soon, .overdue-badge { margin-left: 0; }
-  .app-notice { margin: 12px 16px 0; }
-  .app-notice:has(+ .my-day) { padding: 0 16px; }
-}
-
 .page { padding: 40px 48px 64px; display: grid; gap: 24px; align-content: start; max-width: 1280px; }
-@media (max-width: 800px) { .page { padding: 16px; gap: 16px; } }
 .page h2 { font-size: 1.25rem; }
 .cell-sub { font-size: 0.75rem; color: var(--color-muted); }
 
@@ -84,18 +63,9 @@ strong, b, th { font-weight: 500; }
 .counter.alert { background: var(--color-danger); border-right-color: var(--color-danger); }
 .counter.alert dd, .counter.alert dt { color: var(--fdl-ivory); }
 .counter.overdue:not(.alert) dd { color: var(--color-danger); }
-.my-day-main { display: grid; grid-template-columns: minmax(0, 680px); gap: 40px; align-items: start; }
-@media (min-width: 1200px) { .my-day-main { grid-template-columns: minmax(0, 680px) 300px; justify-content: space-between; } }
+.my-day-main { display: grid; grid-template-columns: minmax(0, 680px) 300px; justify-content: space-between; gap: 40px; align-items: start; }
 .my-day-rail { display: grid; gap: 4px; align-content: start; }
 .rail-more { margin: 8px 0 0; font-size: 0.8125rem; color: var(--color-muted); }
-@media (max-width: 800px) {
-  .my-day { padding: 12px 16px 32px; gap: 16px; }
-  .counters { flex-wrap: nowrap; }
-  .counter { flex: 1; flex-direction: column-reverse; align-items: flex-start; gap: 2px; padding: 8px; }
-  .counter dt { font-size: 0.5625rem; }
-  .counter dd { font-size: 1.125rem; }
-  .my-day-main { gap: 24px; }
-}
 
 /* Up next: a plain list, hairline-separated. Deliberately nothing like the card. */
 .queue-list { list-style: none; margin: 0; padding: 0; display: grid; }
@@ -162,7 +132,6 @@ strong, b, th { font-weight: 500; }
 .fu-row.overdue { background: var(--color-danger-tint); box-shadow: inset 4px 0 0 var(--color-danger); }
 .fu-row.overdue .fu-when { color: var(--color-danger); }
 .fu-note { color: var(--color-muted); overflow-wrap: anywhere; }
-@media (max-width: 800px) { .fu-row { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── History: list + timeline rail (rail drops below on a phone). ────── */
 .history-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 40px; align-items: start; }
@@ -177,7 +146,6 @@ strong, b, th { font-weight: 500; }
 .history-rail a { color: var(--fdl-green); font-size: 0.8125rem; }
 .timeline { gap: 14px; margin-top: 8px; }
 .timeline li { display: grid; gap: 2px; font-size: 0.8125rem; padding-left: 14px; border-left: 2px solid var(--fdl-hairline); overflow-wrap: anywhere; }
-@media (max-width: 800px) { .history-main { grid-template-columns: minmax(0, 1fr); } .history-rail { position: static; border-left: 0; border-top: 1px solid var(--fdl-hairline); padding: 16px 0 0; } }
 
 .stub { max-width: 640px; }
 .stub p { margin: 0; color: var(--color-muted); }
@@ -185,7 +153,7 @@ strong, b, th { font-weight: 500; }
 /* ── Lead card, Layer 1. The phone number is the page's focal point; everything else steps back. ── */
 .lead-card { background: var(--fdl-white); border-radius: var(--fdl-radius-lg); padding: 40px 44px 32px; display: grid; gap: 14px; max-width: 680px; box-shadow: 0 0 0 1px var(--fdl-hairline); }
 .lead-card .phone {
-  font-size: clamp(2.5rem, 6.5vw, 4rem); font-weight: 500; line-height: 1; letter-spacing: -0.02em;
+  font-size: 4rem; font-weight: 500; line-height: 1; letter-spacing: -0.02em;
   color: var(--fdl-green); text-decoration: none; font-variant-numeric: tabular-nums; word-break: break-word; margin-bottom: 12px;
 }
 .lead-card .phone.missing { color: var(--color-muted); font-weight: 500; font-size: 1.5rem; }
@@ -194,14 +162,11 @@ strong, b, th { font-weight: 500; }
 .lead-card .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .lead-card .row .state-tag { order: -1; }
 .lead-card .why-now { font-size: 0.8125rem; color: var(--color-muted); font-style: italic; margin-top: 6px; }
-.card-actions { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; padding-top: 24px; margin-top: 14px; border-top: 1px solid var(--fdl-hairline); }
-.card-actions > .outcome-button { margin-right: 8px; }
-/* Card expanders read as quiet links next to the one primary action. Direct children only: the outcome sheet
-   renders inside .card-actions and its choice chips must keep their own style. */
+.card-actions { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; padding-top: 6px; }
+/* Card expanders read as quiet links under the outcome panel. Direct children only, so the panel's choice chips keep their own style. */
 .card-actions > .chip { background: none; border: 0; border-radius: 0; padding: 4px 0; color: var(--fdl-green); font-weight: 500; }
 .card-actions > .chip::after { content: " →"; }
 .card-actions > .chip:hover { text-decoration: underline; text-underline-offset: 3px; }
-@media (max-width: 800px) { .lead-card { padding: 24px 20px 20px; } }
 
 .outcome-button { background: var(--fdl-green); color: var(--fdl-ivory); border: 0; border-radius: var(--fdl-radius); padding: 11px 20px; font-size: 0.875rem; font-weight: 500; justify-self: start; }
 .outcome-button:disabled { opacity: 0.6; cursor: default; }
@@ -215,13 +180,15 @@ strong, b, th { font-weight: 500; }
 .login input { font: inherit; padding: 10px 12px; border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius); background: var(--fdl-ivory); color: var(--fdl-charcoal); }
 .empty { color: var(--color-muted); padding: 24px; }
 
-/* Outcome sheet — a bottom sheet over a dimmed backdrop, so the lead card (phone number first) stays visible above it. */
-.sheet-backdrop { position: fixed; inset: 0; background: color-mix(in srgb, var(--fdl-charcoal) 50%, transparent); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
-.sheet { background: var(--fdl-white); border-radius: var(--fdl-radius-lg) var(--fdl-radius-lg) 0 0; width: 100%; max-width: 640px; max-height: 65vh; overflow-y: auto; padding: 20px 24px 24px; display: grid; gap: 14px; }
-.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.sheet .link-button { color: var(--color-muted); }
-.disposition-grid, .shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { background: var(--fdl-ivory); color: var(--fdl-charcoal); border: 1px solid var(--fdl-hairline); border-radius: 999px; padding: 6px 14px; font-size: 0.8125rem; }
+/* Outcome panel: always visible in the lead view (no modal). One row of options; the chosen one opens its
+   fields inline beneath. Used inside the lead card and as its own band in Layer 2. */
+.outcome-panel { display: grid; gap: 14px; }
+.lead-card .outcome-panel { padding-top: 24px; margin-top: 10px; border-top: 1px solid var(--fdl-hairline); }
+.l2 .outcome-panel { margin-top: 20px; }
+.outcome-detail { display: grid; gap: 14px; }
+.outcome-save { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.disposition-grid, .shortcuts { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: var(--fdl-ivory); color: var(--fdl-charcoal); border: 1px solid var(--fdl-hairline); border-radius: 999px; padding: 6px 10px; font-size: 0.8125rem; }
 .chip:hover { border-color: var(--fdl-green); }
 .chip[aria-checked="true"] { background: var(--fdl-green); border-color: var(--fdl-green); color: var(--fdl-ivory); }
 .sheet-hint { margin: 0; font-size: 0.8125rem; color: var(--color-muted); }
@@ -230,7 +197,7 @@ strong, b, th { font-weight: 500; }
 .sheet-field { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--color-muted); }
 .sheet-field input, .sheet-field select { font: inherit; padding: 8px 10px; border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius); background: var(--fdl-ivory); color: var(--fdl-charcoal); }
 
-/* Layer 2 lead detail (spec 11.2). Header + contact block pinned; three columns, right collapses below 1200. */
+/* Layer 2 lead detail (spec 11.2). Header + contact block pinned; three columns. */
 .l2 { padding: 0 48px 64px; max-width: 1440px; margin: 0 auto; }
 .l2 section { scroll-margin-top: var(--l2-top, 220px); }
 .l2 h2, .l2 h3, .l2-role, .l2-contact-name, .l2-facts dd, .l2-script, .l2-alternates li, .l2-email { overflow-wrap: anywhere; } /* long names/titles wrap, never truncate */
@@ -255,10 +222,5 @@ strong, b, th { font-weight: 500; }
 .l2-script { margin: 0; white-space: pre-wrap; }
 .l2-raw { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.8125rem; }
 .l2-alternates { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.875rem; }
-@media (max-width: 1199px) {
-  .l2-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
-  .l2-right { grid-column: 1 / -1; }
-}
-@media (max-width: 800px) { .l2 { padding: 0 16px 32px; } .l2-cols { grid-template-columns: minmax(0, 1fr); } .l2-phone { font-size: 1.625rem; } }
 .l2-flag { margin-top: 14px; display: grid; gap: 6px; justify-items: start; }
 .l2-flagged { margin: 14px 0 0; font-size: 0.8125rem; color: var(--fdl-green); background: var(--fdl-green-tint-08); border-radius: var(--fdl-radius); padding: 8px 10px; overflow-wrap: anywhere; }

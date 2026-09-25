@@ -1,5 +1,5 @@
 import type { InteractionEvent, QueueItem } from "../../lib/types";
-import LogOutcome from "../LogOutcome";
+import OutcomePanel from "../OutcomePanel";
 import LeadCardLayer1 from "./LeadCardLayer1";
 import type { DetailSection } from "../LeadDetail/LeadDetail";
 
@@ -20,8 +20,8 @@ export default function LeadCard({ item, onLogged, onExpand, submitLabel }: Prop
   return (
     <article className="lead-card">
       <LeadCardLayer1 item={item} />
+      <OutcomePanel item={item} onLogged={onLogged} submitLabel={submitLabel} />
       <div className="card-actions">
-        <LogOutcome item={item} onLogged={onLogged} submitLabel={submitLabel} />
         {EXPANDERS.map((e) => (
           <button key={e.section} className="chip" onClick={() => onExpand(e.section)}>{e.label}</button>
         ))}

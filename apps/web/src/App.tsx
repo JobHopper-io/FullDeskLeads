@@ -61,11 +61,6 @@ function Shell() {
       <div className="app">
         <aside className="sidebar">
           <div className="wordmark"><img src="/brand/logos/fdl-wordmark-white.svg" alt="Full Desk Leads" /></div>
-          {/* Phone only: the account row folds into a small menu next to the wordmark. */}
-          <details className="account-menu">
-            <summary>Account</summary>
-            <div className="account-pop"><Account email={email} role={seat?.role} /></div>
-          </details>
           {seat && <Nav />}
           <div className="account"><Account email={email} role={seat?.role} /></div>
         </aside>

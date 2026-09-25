@@ -60,9 +60,8 @@ async function run(label, patch, vp, section, buttonText) {
   check(r.clipped.length === 0, `no truncated/clipped text (${r.clipped.join(",") || "none"})`);
   check(r.phone && r.phone.top >= 0 && r.phone.bottom <= vp.height, "phone number visible in the pinned header");
   check(r.target && r.target.top >= r.top.bottom - 1 && r.target.top < vp.height, "target section visible below the pinned header, not under it");
-  if (vp.width >= 1200) check(Math.abs(r.left.top - r.centre.top) < 2 && Math.abs(r.centre.top - r.right.top) < 2 && r.left.right <= r.centre.left && r.centre.right <= r.right.left, "three columns side by side");
-  else if (vp.width >= 800) check(r.right.top >= Math.max(r.left.bottom, r.centre.bottom) - 1 && r.left.right <= r.centre.left, "left+centre side by side, right column collapsed beneath");
-  else check(r.centre.top >= r.left.bottom - 1 && r.right.top >= r.centre.bottom - 1, "single stacked column on a phone");
+  // Desktop only (spec §15: no responsive breakpoints): always three columns side by side.
+  check(Math.abs(r.left.top - r.centre.top) < 2 && Math.abs(r.centre.top - r.right.top) < 2 && r.left.right <= r.centre.left && r.centre.right <= r.right.left, "three columns side by side");
   if (patch) check(r.company === patch.company && r.role.startsWith(patch.roleTitle), "full company and role text rendered");
   await page.screenshot({ path: `${SP}/l2-${label}-${vp.width}.png`, fullPage: true });
   if (label === "real") console.log("  provenance:", r.facts.join(" | "), "\n  placeholders:", r.texts);
@@ -70,7 +69,8 @@ async function run(label, patch, vp, section, buttonText) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
   await ctx.close();
 }
-for (const vp of [{ width: 1440, height: 900 }, { width: 1100, height: 800 }, { width: 390, height: 800 }]) {
+// 1440x900 is the floor; 1920x1080 checks that it breathes upward.
+for (const vp of [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
   await run("spec-long", LONG, vp, "objections", "Objection handling");
   await run("real-long", LONG_REAL, vp, "role", "Role detail");
 }

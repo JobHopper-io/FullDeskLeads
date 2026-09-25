@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiPost } from "../../lib/apiClient";
 import { SIGNAL_TYPE, confidenceLabel, formatDate } from "../../lib/provenance";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
-import LogOutcome from "../LogOutcome";
+import OutcomePanel from "../OutcomePanel";
 import StateTag from "../StateTag";
 
 export type DetailSection = "script" | "role" | "objections";
@@ -62,7 +62,6 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
       <div className="l2-top" ref={topRef}>
         <div className="l2-top-row">
           <button className="link-button" onClick={onBack}>← Back</button>
-          <LogOutcome item={item} onLogged={onLogged} />
         </div>
         <h2 className="l2-company">{item.company}</h2>
         <div className="l2-role">
@@ -77,6 +76,8 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
           {email && <a className="l2-email" href={`mailto:${email}`}>{email}</a>}
         </div>
       </div>
+
+      <OutcomePanel item={item} onLogged={onLogged} />
 
       <div className="l2-cols">
         <div className="l2-left">
