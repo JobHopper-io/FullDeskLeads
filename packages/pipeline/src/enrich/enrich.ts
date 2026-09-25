@@ -1,8 +1,8 @@
 import { createLogger } from "@fdl/shared";
-import { companyRepository, contactRepository, enrichmentAttemptRepository, hiringSignalRepository } from "@fdl/db";
+import { companyRepository, contactRepository, enrichmentAttemptRepository, hiringSignalRepository, type ContactRow } from "@fdl/db";
 import { SeamlessClient, SeamlessPollTimeoutError, type PollResult } from "@fdl/enrichment";
 import { getDb } from "../db.js";
-import { TIER_ORDER, buildTierTitles, humanKey, selectCandidates, type TieredResult } from "./multiContact.js";
+import { TIER_ORDER, assignPrimaryAndAlternates, buildTierTitles, humanKey, selectCandidates, type TieredResult } from "./multiContact.js";
 import { siteVsCorporate } from "./geo.js";
 import { deriveJobTitleHints, isGenericFallback } from "./roleFamily.js";
 
@@ -237,11 +237,21 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       return { contactId: null, confidence: null, terminalStatus: status, researchSubmitted: picked.length, searchesRun };
     }
 
-    const created: { id: string; confidence: number | null; source: Found }[] = [];
+    // Store each person once per signal. If the person is already stored for this signal (a concurrent run, or an
+    // earlier enrichment being redone: re-enrichment keeps old rows), the same human is reused rather than duplicated.
+    const stored: { row: ContactRow; source: Found; reused: boolean }[] = [];
     for (const f of found) {
       const cand = f.candidate;
+      const fields = {
+        contactCity: cand.city,
+        contactState: cand.state,
+        companyHqCity: cand.companyCity,
+        companyHqState: cand.companyState,
+        siteVsCorporate: siteVsCorporate(cand.city, cand.state, cand.companyCity, cand.companyState),
+        tier: cand.tier,
+      };
       try {
-        const contact = await contacts.create({
+        const row = await contacts.create({
           companyId: company.id,
           hiringSignalId,
           name: f.contact.fullName,
@@ -251,31 +261,23 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
           confidenceScore: f.confidence ?? 0,
           source: "seamless",
           sourceContactId: f.contact.contactId,
-          contactCity: cand.city,
-          contactState: cand.state,
-          companyHqCity: cand.companyCity,
-          companyHqState: cand.companyState,
-          siteVsCorporate: siteVsCorporate(cand.city, cand.state, cand.companyCity, cand.companyState),
-          tier: cand.tier,
+          ...fields,
         });
-        created.push({ id: contact.id, confidence: f.confidence, source: f });
+        stored.push({ row, source: f, reused: false });
       } catch (err) {
-        // A concurrent run for the same signal already wrote this person: the unique key did its job.
-        if ((err as { code?: string }).code === "23505") {
-          log.warn({ hiringSignalId, sourceContactId: f.contact.contactId }, "contact already stored for this signal — skipping the duplicate");
-          continue;
-        }
-        throw err;
+        if ((err as { code?: string }).code !== "23505") throw err;
+        const existing = await contacts.findBySignalAndPerson(hiringSignalId, f.contact.contactId);
+        if (!existing) throw err;
+        log.info({ hiringSignalId, sourceContactId: f.contact.contactId }, "person already stored for this signal — reusing the row");
+        stored.push({ row: await contacts.reuse(existing.id, fields), source: f, reused: true });
       }
     }
-    if (created.length === 0) {
-      await recordAttempt("done", { message: "every researched contact was already stored for this signal" });
-      return { contactId: null, confidence: null, terminalStatus: "done", contactIds: [], researchSubmitted: picked.length, searchesRun };
-    }
 
-    // Primary = highest confidence (the same rule emit applies when it writes leads.primary_contact_id).
-    const ordered = [...created].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
-    const primary = ordered[0];
+    // The primary is chosen by the same rule emit will use (best tier, near the opening, then confidence); the rest
+    // follow as the alternates.
+    const assigned = assignPrimaryAndAlternates(stored.map((s) => s.row), hiringSignal.location)!;
+    const ordered = [assigned.primary, ...assigned.alternates];
+    const primary = stored.find((s) => s.row.id === assigned.primary.id)!;
     requestId = primary.source.requestId;
     searchResultId = primary.source.candidate.searchResultId;
 
@@ -283,24 +285,25 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       {
         hiringSignalId,
         contactIds: ordered.map((c) => c.id),
-        confidences: ordered.map((c) => c.confidence),
-        tiers: created.map((c) => c.source.candidate.tier),
+        confidences: ordered.map((c) => c.confidence_score),
+        tiers: ordered.map((c) => c.tier),
         searchesRun,
-        contacts: created.length,
+        contacts: stored.length,
+        reused: stored.filter((s) => s.reused).length,
         picked: picked.length,
-        recovered: created.filter((c) => c.source.recovered).length,
+        recovered: stored.filter((s) => s.source.recovered).length,
       },
       "enrichment produced contacts",
     );
     await recordAttempt("done", {
-      contactId: primary.id,
-      confidence: primary.confidence,
-      message: `${created.length} contact(s) of ${picked.length} researched${created.some((c) => c.source.recovered) ? `; ${created.filter((c) => c.source.recovered).length} recovered via duplicate's initialRequestId` : ""}`,
+      contactId: assigned.primary.id,
+      confidence: assigned.primary.confidence_score,
+      message: `${stored.length} contact(s) of ${picked.length} researched${stored.some((s) => s.source.recovered) ? `; ${stored.filter((s) => s.source.recovered).length} recovered via duplicate's initialRequestId` : ""}${stored.some((s) => s.reused) ? `; ${stored.filter((s) => s.reused).length} already stored, reused` : ""}`,
     });
 
     return {
-      contactId: primary.id,
-      confidence: primary.confidence,
+      contactId: assigned.primary.id,
+      confidence: assigned.primary.confidence_score,
       contactIds: ordered.map((c) => c.id),
       researchSubmitted: picked.length,
       searchesRun,

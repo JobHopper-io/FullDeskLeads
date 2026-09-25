@@ -5,6 +5,7 @@ export * from "./resolve-identity/resolveIdentity.js";
 export * from "./resolve-identity/dedupe.js";
 export * from "./filter/filter.js";
 export * from "./enrich/enrich.js";
+export * from "./enrich/multiContact.js";
 export * from "./select-contact/selectContact.js";
 export * from "./score/score.js";
 export * from "./emit/emit.js";

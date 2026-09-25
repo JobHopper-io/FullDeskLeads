@@ -113,6 +113,8 @@ export interface ContactRow {
   site_vs_corporate: "site" | "corporate" | null;
   /** Which per-tier search found this person (migration 0027); null on rows written before it existed. */
   tier: "function" | "site" | "hr" | null;
+  /** Set when a corrected re-enrichment replaced this row (migration 0029). Null = current. The row is kept. */
+  superseded_at: string | null;
 }
 
 export interface EnrichmentAttemptRow {

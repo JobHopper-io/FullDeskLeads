@@ -17,6 +17,16 @@ export function leadRepository(db: SupabaseClient) {
       return data;
     },
 
+    // A corrected re-enrichment changed which contacts belong to this lead: point it at them. The old contact rows
+    // stay in the table (superseded), only the lead's pointers move.
+    setContacts: async (leadId: string, primaryContactId: string, alternateContactIds: string[]): Promise<void> => {
+      const { error } = await db
+        .from("leads")
+        .update({ primary_contact_id: primaryContactId, alternate_contact_ids: alternateContactIds, updated_at: new Date().toISOString() })
+        .eq("id", leadId);
+      if (error) throw error;
+    },
+
     // Day 10 emit: write the finished global lead. why_now/pitch_angle/etc. stay null in the
     // base phase — a hardcoded placeholder stands in for generated intelligence.
     create: async (input: {
