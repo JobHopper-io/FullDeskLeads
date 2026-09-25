@@ -19,6 +19,8 @@ export function contactRepository(db: SupabaseClient) {
       sourceContactId?: string | null;
       contactCity?: string | null;
       contactState?: string | null;
+      companyHqCity?: string | null;
+      companyHqState?: string | null;
       siteVsCorporate?: "site" | "corporate" | null;
       tier?: "function" | "site" | "hr" | null;
     }): Promise<ContactRow> => {
@@ -36,6 +38,8 @@ export function contactRepository(db: SupabaseClient) {
           source_contact_id: input.sourceContactId ?? null,
           contact_city: input.contactCity ?? null,
           contact_state: input.contactState ?? null,
+          company_hq_city: input.companyHqCity ?? null,
+          company_hq_state: input.companyHqState ?? null,
           site_vs_corporate: input.siteVsCorporate ?? null,
           tier: input.tier ?? null,
         })

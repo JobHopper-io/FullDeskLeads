@@ -302,6 +302,8 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
           sourceContactId: f.contact.contactId,
           contactCity: cand.city,
           contactState: cand.state,
+          companyHqCity: cand.companyCity,
+          companyHqState: cand.companyState,
           siteVsCorporate: siteVsCorporate(cand.city, cand.state, cand.companyCity, cand.companyState),
           tier: cand.tier,
         });

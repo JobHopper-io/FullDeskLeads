@@ -34,14 +34,36 @@ export function buildTierTitles(functionTitles: string[]): Record<ContactTier, s
 }
 
 /**
- * Keyword guess at a title's tier. Only a fallback now, for contacts written before the tier was stored (it's
- * known exactly at search time, from which search found the person). It misjudges some titles, e.g. an "IT
- * Operations Manager" reads as site lead.
+ * Words that put a title in some department's own function rather than in running a plant or site. Any of them
+ * anywhere in a title rules it out as a site lead: "Information Technology Operations Manager" runs IT, not the
+ * plant. Deliberately broad (conservative): a real site lead wrongly left out just falls through to a lower tier,
+ * whereas a Legal or Finance manager wrongly promoted would be a bad primary. "production" and "manufacturing" are
+ * not listed: they are the operating side.
  */
-export function tierOf(title: string): ContactTier {
+const NON_SITE_DEPARTMENT =
+  /\b(it|i\.t|information (?:technology|systems|services)|software|network|cyber\w*|infosec|security|legal|law|counsel|compliance|risk|audit|finance|financial|accounting|payroll|treasury|tax|marketing|sales|revenue|customer|client|call center|contact center|help ?desk|support|talent|recruit\w*|hr|human resources|people|benefits|procurement|purchasing|supply chain|logistics|transportation|real estate|business|digital|data|analytics|technology|engineering|quality|safety|ehs|environmental|training|learning|communications|brand|product|design)\b/i;
+
+/**
+ * Is this title plausibly someone who runs a plant or site? Plant / site / general managers and directors,
+ * operations managers and directors, VPs of operations, COOs, and nothing that names another department. A title
+ * this returns false for is not a site lead, however much "Operations Manager" it contains.
+ */
+export function isPlausibleSiteLead(title: string): boolean {
+  if (NON_SITE_DEPARTMENT.test(title)) return false;
+  return /\b(plant|site) (?:manager|director|superintendent)\b|\bgeneral manager\b|\boperations (?:manager|director)\b|\b(?:manager|director|head) of operations\b|\b(?:vp|vice president)\b.*\boperations\b|\bchief operating officer\b|\bcoo\b/i.test(title);
+}
+
+/** Not a tier the searches produce: for a contact whose tier isn't known and can't be guessed safely. Ranks last. */
+export type GuessedTier = ContactTier | "other";
+
+/**
+ * Keyword guess at a title's tier. Only a fallback, for contacts written before the tier was stored (it's known
+ * exactly at search time, from which search found the person). Conservative: a title that is neither HR nor a
+ * plausible site lead is "other", which ranks below every real tier, never assumed to be a function manager.
+ */
+export function tierOf(title: string): GuessedTier {
   if (/\b(hr|human resources|talent|recruit\w*|people (?:&|and)? ?culture)\b/i.test(title)) return "hr";
-  if (/\b(plant manager|general manager|operations manager|site manager|director of operations|coo)\b/i.test(title)) return "site";
-  return "function";
+  return isPlausibleSiteLead(title) ? "site" : "other";
 }
 
 const normDomain = (d: string | null | undefined) => (d ?? "").trim().toLowerCase().replace(/^www\./, "");
@@ -108,8 +130,11 @@ export function selectCandidates(
     if (!r.searchResultId || seen.has(r.searchResultId)) continue;
     seen.add(r.searchResultId);
     const m = matchesCompany(r, ours);
-    if (m.ok) eligible.push(r);
-    else rejected.push({ result: r, reason: m.reason });
+    if (!m.ok) rejected.push({ result: r, reason: m.reason });
+    // A search for "Operations Manager" also returns IT, Legal and Finance operations managers. Those are not
+    // site leads, so they aren't offered as one (they fall away, and a lower tier fills the slot).
+    else if (r.tier === "site" && !isPlausibleSiteLead(r.title)) rejected.push({ result: r, reason: `not a plausible site lead: ${r.title}` });
+    else eligible.push(r);
   }
 
   const picked: TieredResult[] = [];
@@ -136,7 +161,8 @@ export function assignPrimaryAndAlternates<T extends { id: string; confidence_sc
   maxAlternates = MAX_CONTACTS_PER_SIGNAL - 1,
 ): { primary: T; alternates: T[] } | null {
   if (contacts.length === 0) return null;
-  const tierRank = (c: T) => TIER_ORDER.indexOf(c.tier ?? tierOf(c.title));
+  const RANK: GuessedTier[] = [...TIER_ORDER, "other"];
+  const tierRank = (c: T) => RANK.indexOf(c.tier ?? tierOf(c.title));
   const best = Math.min(...contacts.map(tierRank));
   const indexed = contacts.map((c, i) => ({ c, i }));
   const byConfidence = (a: { c: T; i: number }, b: { c: T; i: number }) => b.c.confidence_score - a.c.confidence_score || a.i - b.i;

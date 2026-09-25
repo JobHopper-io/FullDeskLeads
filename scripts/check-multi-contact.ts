@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  assignPrimaryAndAlternates, buildTierTitles, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
+  assignPrimaryAndAlternates, buildTierTitles, isPlausibleSiteLead, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
 } from "../packages/pipeline/src/enrich/multiContact.js";
 import { distanceMiles, lookupPlace, siteVsCorporate } from "../packages/pipeline/src/enrich/geo.js";
 import type { SearchContactResult } from "../packages/enrichment/src/index.js";
@@ -68,6 +68,35 @@ assert.equal(selectCandidates([...fn, ...site, ...hr], ours, 2).picked.length, 2
 const stray = tiered([r("z1", "Z", "Plant Manager", "other.com", "Other Co", "a", "b", "c", "d")], "site");
 assert.equal(selectCandidates([...stray, ...site], ours).rejected.length, 1);
 
+// ── site tier: a plausible plant/site lead, not any department's own "operations" ────────────────────────────
+// REAL titles from the 8-signal run that were wrongly promoted, and real ones that were fine:
+for (const t of ["Information Technology Operations Manager", "Legal Operations Manager", "IT Manager - Infrastructure & Operations Platform Engineering", "Senior Manager Infrastructure Operations"]) {
+  assert(!isPlausibleSiteLead(t), `${t} is not a site lead`);
+}
+for (const t of ["Plant Manager", "Senior Vice President and General Manager", "Vice President & General Manager, Andersen Division", "Vice President and General Manager - Western Operations"]) {
+  assert(isPlausibleSiteLead(t), `${t} is a site lead`);
+}
+// SYNTHETIC: other real-world shapes. Departments' own operations roles are out...
+for (const t of ["Finance Operations Manager", "HR Operations Manager", "Sales Operations Manager", "Marketing Operations Manager", "Business Operations Manager", "Customer Operations Manager",
+  "Supply Chain Operations Manager", "Operations Manager, IT", "Software Operations Manager", "Security Operations Manager", "Accounting Operations Manager", "Quality Operations Manager", "Director of IT Operations", "VP of Legal Operations", "Talent Operations Manager"]) {
+  assert(!isPlausibleSiteLead(t), `${t} must not be a site lead`);
+}
+// ...and operating roles are in, whatever their prefix
+for (const t of ["Operations Manager", "Regional Operations Manager", "Manufacturing Operations Manager", "Production Operations Manager", "Site Operations Manager", "Director of Operations", "Operations Director",
+  "Head of Operations", "VP of Operations", "Vice President, Operations", "Chief Operating Officer", "COO", "Site Manager", "Plant Director", "General Manager"]) {
+  assert(isPlausibleSiteLead(t), `${t} should be a site lead`);
+}
+// in selection: the IT and Legal ops managers the site search returned are dropped and NOT replaced by anyone unfit
+const crestSite = tiered([acme("s1", "Matthew Phillips", "Information Technology Operations Manager"), acme("s2", "Emily Baum", "Legal Operations Manager"), acme("s3", "Real Plant Mgr", "Plant Manager")], "site");
+const sel = selectCandidates([...crestSite, ...hr], ours);
+assert.deepEqual(sel.picked.map((x) => x.name), ["Real Plant Mgr", "H1", "H2"]);
+assert.deepEqual(sel.rejected.map((x) => x.result.name), ["Matthew Phillips", "Emily Baum"]);
+assert(sel.rejected[0].reason.startsWith("not a plausible site lead"));
+// with no real site lead at all, the tier is simply empty and the slots go to the next tier, never to the IT/Legal people
+assert.deepEqual(selectCandidates([...tiered(crestSite.slice(0, 2), "site"), ...hr], ours).picked.map((x) => x.name), ["H1", "H2"]);
+// the same title from the FUNCTION search is unaffected (that filter is for the site tier only)
+assert.equal(selectCandidates(tiered([acme("q1", "Q", "Legal Operations Manager")], "function"), ours).picked.length, 1);
+
 // ── primary = highest confidence within the best available tier ─────────────
 const c = (id: string, conf: number, title: string, tier: ContactTier | null) => ({ id, confidence_score: conf, title, tier });
 // function beats a higher-confidence site or HR person
@@ -83,8 +112,14 @@ assert.equal(assignPrimaryAndAlternates([c("x", 0.9, "Maintenance Manager", "fun
 assert.equal(assignPrimaryAndAlternates([c("h", 0.7, "HR Manager", "hr")])!.primary.id, "h");
 // the stored tier beats the title guess, and a missing tier falls back to the guess
 assert.equal(assignPrimaryAndAlternates([c("a", 0.9, "Operations Manager", "function"), c("b", 0.99, "Plant Manager", "site")])!.primary.id, "a");
-assert.equal(assignPrimaryAndAlternates([c("a", 0.9, "Maintenance Manager", null), c("b", 0.99, "Plant Manager", null)])!.primary.id, "a");
+// a missing tier falls back to the conservative guess: a plausible site lead is 'site', HR is 'hr', anything else is 'other' and ranks last
+assert.equal(assignPrimaryAndAlternates([c("a", 0.99, "Maintenance Manager", null), c("b", 0.9, "Plant Manager", null)])!.primary.id, "b");
+assert.equal(assignPrimaryAndAlternates([c("a", 0.7, "Plant Manager", null), c("b", 0.99, "Human Resources Manager", null)])!.primary.id, "a");
+assert.equal(assignPrimaryAndAlternates([c("a", 0.99, "Information Technology Operations Manager", null), c("b", 0.5, "HR Manager", null)])!.primary.id, "b"); // an IT ops manager is 'other', below HR
+assert.equal(assignPrimaryAndAlternates([c("a", 0.9, "Maintenance Manager", null), c("b", 0.99, "Legal Operations Manager", null)])!.primary.id, "b"); // all 'other': plain highest confidence, as before tiers
 assert.equal(tierOf("HR Manager"), "hr");
+assert.equal(tierOf("Plant Manager"), "site");
+assert.equal(tierOf("Legal Operations Manager"), "other");
 // alternates capped at 3; a single contact gives none, as today; none gives null
 assert.equal(assignPrimaryAndAlternates([1, 2, 3, 4, 5, 6].map((i) => c(`p${i}`, 0.9 - i / 100, "Maintenance Manager", "function")))!.alternates.length, 3);
 assert.deepEqual(assignPrimaryAndAlternates([c("only", 0.9, "Maintenance Manager", "function")])!.alternates, []);

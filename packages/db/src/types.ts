@@ -106,6 +106,9 @@ export interface ContactRow {
   /** From Seamless's search response (migration 0024); null on rows written before it existed. */
   contact_city: string | null;
   contact_state: string | null;
+  /** The company HQ Seamless reported for this same result (migration 0028), so the flag can be recomputed later. */
+  company_hq_city: string | null;
+  company_hq_state: string | null;
   /** 'corporate' = at the company's HQ city + state, 'site' = elsewhere, null = unknown. */
   site_vs_corporate: "site" | "corporate" | null;
   /** Which per-tier search found this person (migration 0027); null on rows written before it existed. */
