@@ -65,3 +65,49 @@ export function siteVsCorporate(
   if (!a || !b) return "site";
   return distanceMiles(a, b) <= radiusMiles ? "corporate" : "site";
 }
+
+// ── the opening's own location (hiring_signals.location), for choosing a primary near the job ─────────────────────
+
+const COUNTRY_OR_REMOTE = /^(united states(?: of america)?|usa|us|u\.s\.a?\.?|canada|remote|us ?- ?remote)$/i;
+
+/**
+ * The cities in a posting's location string. Real shapes: "Port Lavaca, Texas", "Buffalo, NY", "Jacksonville,
+ * Florida, United States", multi-city lists ("Dallas, Texas, United States; Plano, Texas, United States"), and
+ * ones with no usable place ("United States", "US - Remote", a bare state, a city with no state). Only "city,
+ * state" parts count; the rest yield nothing, which callers treat as "no location", never as a guess.
+ */
+export function parseLocation(location: string | null | undefined): { city: string; state: string }[] {
+  if (!location) return [];
+  return location.split(";").flatMap((part) => {
+    const tokens = part
+      .split(",")
+      .map((t) => t.trim().replace(/\s+\d{5}(-\d{4})?$/, ""))
+      .filter((t) => t && !COUNTRY_OR_REMOTE.test(t));
+    return tokens.length >= 2 && stateAbbreviation(tokens[1]) ? [{ city: tokens[0], state: tokens[1] }] : [];
+  });
+}
+
+/**
+ * Miles from a contact to the opening: to the nearest place in the posting's location. 0 when the contact is in
+ * one of those cities (compared by name, so it holds even where the place isn't in the coordinate table). Null
+ * when there's nothing to measure: no contact city/state, an opening with no usable place, or a place the table
+ * doesn't have and that isn't a name match.
+ */
+export function distanceToOpening(
+  contactCity: string | null | undefined,
+  contactState: string | null | undefined,
+  openingLocation: string | null | undefined,
+): number | null {
+  if (!contactCity?.trim() || !contactState?.trim()) return null;
+  const places = parseLocation(openingLocation);
+  // Openings say "NY", Seamless says "New York": compare states by abbreviation when both are recognizable.
+  const sameState = (x: string, y: string) => (stateAbbreviation(x) && stateAbbreviation(x) === stateAbbreviation(y)) || same(x, y);
+  if (places.some((p) => same(p.city, contactCity) && sameState(p.state, contactState))) return 0;
+  const here = lookupPlace(contactCity, contactState);
+  if (!here) return null;
+  const miles = places.flatMap((p) => {
+    const there = lookupPlace(p.city, p.state);
+    return there ? [distanceMiles(here, there)] : [];
+  });
+  return miles.length ? Math.min(...miles) : null;
+}

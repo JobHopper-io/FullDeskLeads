@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {
   assignPrimaryAndAlternates, buildTierTitles, humanKey, isPlausibleSiteLead, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
 } from "../packages/pipeline/src/enrich/multiContact.js";
-import { distanceMiles, lookupPlace, siteVsCorporate } from "../packages/pipeline/src/enrich/geo.js";
+import { distanceMiles, distanceToOpening, lookupPlace, parseLocation, siteVsCorporate } from "../packages/pipeline/src/enrich/geo.js";
 import type { SearchContactResult } from "../packages/enrichment/src/index.js";
 
 // Run: tsx scripts/check-multi-contact.ts   (no network, no database, spends nothing)
@@ -155,5 +155,66 @@ assert.equal(siteVsCorporate("Amman", "Amman", "Pineville", "Louisiana"), "site"
 assert.equal(siteVsCorporate(" fremont ", "CALIFORNIA", "Fremont", "California"), "corporate");
 assert.equal(siteVsCorporate(null, "Texas", "Selma", "Texas"), null);                                // missing = unknown, never guessed
 assert.equal(siteVsCorporate("Austin", "Texas", "Selma", null), null);
+
+// ── the opening's own location ──────────────────────────────────────────────
+// REAL shapes from hiring_signals.location (127 distinct strings across 421 signals):
+assert.deepEqual(parseLocation("Port Lavaca, Texas"), [{ city: "Port Lavaca", state: "Texas" }]);
+assert.deepEqual(parseLocation("Buffalo, NY"), [{ city: "Buffalo", state: "NY" }]);
+assert.deepEqual(parseLocation("Jacksonville, Florida, United States"), [{ city: "Jacksonville", state: "Florida" }]);
+assert.deepEqual(parseLocation("Cottage Grove, Minnesota"), [{ city: "Cottage Grove", state: "Minnesota" }]);
+assert.deepEqual(parseLocation("Dallas, Texas, United States; Plano, Texas, United States"), [{ city: "Dallas", state: "Texas" }, { city: "Plano", state: "Texas" }]);
+assert.deepEqual(parseLocation("Illinois, USA; Michigan, USA; Plano, Texas, United States; United States"), [{ city: "Plano", state: "Texas" }]); // state-only parts don't count
+assert.deepEqual(parseLocation("Jacksonville, Florida, United States; Surrey, British Columbia, Canada"), [{ city: "Jacksonville", state: "Florida" }]); // Canada: not a US state
+assert.deepEqual(parseLocation("Charleston, WV 25301"), [{ city: "Charleston", state: "WV" }]);                                                       // zip stripped
+for (const none of ["United States", "US - Remote", "Texas", "Texas; US - Remote", "Victoria", "Arizona; Oregon", "Northwest LA & Northeast TX", "", null, undefined]) {
+  assert.deepEqual(parseLocation(none as string), [], `no usable place in ${JSON.stringify(none)}`);
+}
+near(distanceToOpening("Cottage Grove", "Minnesota", "Cottage Grove, Minnesota")!, 0, 0);     // the real Andersen case: a supervisor AT the opening
+assert(distanceToOpening("San Antonio", "Texas", "Cottage Grove, Minnesota")! > 1000);          // the director in Texas, far from the Minnesota opening
+near(distanceToOpening("Geismar", "Louisiana", "Geismar, Louisiana")!, 0, 0);                   // unlocatable place, but a name match: still 0
+near(distanceToOpening("Buffalo", "New York", "Buffalo, NY")!, 0, 0);                            // "NY" and "New York" are the same state
+near(distanceToOpening("Plano", "Texas", "Dallas, Texas, United States; Plano, Texas, United States")!, 0, 0);
+near(distanceToOpening("Fort Worth", "Texas", "Dallas, Texas, United States; Plano, Texas, United States")!, 30, 5);  // nearest of several
+assert.equal(distanceToOpening("Austin", "Texas", "United States"), null);                       // opening has no usable place
+assert.equal(distanceToOpening("Austin", "Texas", null), null);
+assert.equal(distanceToOpening(null, "Texas", "Dallas, Texas"), null);                           // contact has no city
+assert.equal(distanceToOpening("Langley", "British Columbia", "Dallas, Texas"), null);           // unlocatable, no name match
+
+// ── primary: best tier, then near the opening, then highest confidence ──────
+const L = (id: string, conf: number, title: string, tier: ContactTier, city: string, state: string) => ({ ...c(id, conf, title, tier), contact_city: city, contact_state: state });
+// REAL: Andersen "Manufacturing Associate", Cottage Grove MN. The Texas director (0.90) used to win on confidence; the supervisor AT the opening (0.89) now does.
+let g = assignPrimaryAndAlternates([
+  L("lamar", 0.99, "Senior Vice President and General Manager", "site", "Minneapolis", "Minnesota"),
+  L("jack", 0.9, "Director of Production - Central Texas", "function", "San Antonio", "Texas"),
+  L("alex", 0.89, "Production Supervisor", "function", "Cottage Grove", "Minnesota"),
+], "Cottage Grove, Minnesota")!;
+assert.equal(g.primary.id, "alex"); assert(g.nearOpening);
+// ...and without a usable opening location it's the old tier-first rule, so Jack
+assert.equal(assignPrimaryAndAlternates([L("jack", 0.9, "x", "function", "San Antonio", "Texas"), L("alex", 0.89, "x", "function", "Cottage Grove", "Minnesota")], "United States")!.primary.id, "jack");
+assert.equal(assignPrimaryAndAlternates([L("jack", 0.9, "x", "function", "San Antonio", "Texas"), L("alex", 0.89, "x", "function", "Cottage Grove", "Minnesota")])!.primary.id, "jack");
+// REAL, must NOT regress: IEM, opening in Jacksonville FL, both function contacts in San Francisco: none near, so highest confidence: Greg Yurich
+g = assignPrimaryAndAlternates([
+  L("greg", 0.99, "Senior Facilities Manager", "function", "San Francisco", "California"),
+  L("jeremy", 0.91, "Maintenance Manager", "function", "San Francisco", "California"),
+  L("mike", 0.96, "Plant Manager", "site", "Fremont", "California"),
+], "Jacksonville, Florida, United States")!;
+assert.equal(g.primary.id, "greg"); assert(!g.nearOpening);
+// REAL, must NOT regress: Crest maintenance welder, Port Lavaca TX: the only function-tier contact is Travis Rabalais (Convent LA, far): still primary over HR Sarah 0.99
+g = assignPrimaryAndAlternates([
+  L("sarah", 0.99, "Human Resources Manager", "hr", "Alexandria", "Louisiana"),
+  L("travis", 0.86, "Maintenance Manager", "function", "Convent", "Louisiana"),
+], "Port Lavaca, Texas")!;
+assert.equal(g.primary.id, "travis"); assert(!g.nearOpening);
+// location never crosses tiers: an HR person at the opening does not beat a far function manager
+assert.equal(assignPrimaryAndAlternates([L("hr", 0.99, "HR Manager", "hr", "Cottage Grove", "Minnesota"), L("fn", 0.8, "Maintenance Manager", "function", "Tulsa", "Oklahoma")], "Cottage Grove, Minnesota")!.primary.id, "fn");
+// several near: highest confidence among the near ones; a far higher-confidence one loses
+assert.equal(assignPrimaryAndAlternates([L("far", 0.99, "x", "function", "Houston", "Texas"), L("n1", 0.9, "x", "function", "Dallas", "Texas"), L("n2", 0.95, "x", "function", "Plano", "Texas")], "Dallas, Texas")!.primary.id, "n2");
+// near means within the metro radius (25 miles): Austin is ~60 from Selma, San Antonio ~15
+assert.equal(assignPrimaryAndAlternates([L("austin", 0.99, "x", "function", "Austin", "Texas"), L("sa", 0.9, "x", "function", "San Antonio", "Texas")], "Selma, Texas")!.primary.id, "sa");
+// a contact with no location data never blocks a located one, and never wins by location
+assert.equal(assignPrimaryAndAlternates([{ ...c("blank", 0.99, "x", "function") }, L("near", 0.5, "x", "function", "Dallas", "Texas")], "Dallas, Texas")!.primary.id, "near");
+assert.equal(assignPrimaryAndAlternates([{ ...c("blank", 0.99, "x", "function") }, L("far", 0.5, "x", "function", "Boston", "Massachusetts")], "Dallas, Texas")!.primary.id, "blank");
+// alternates keep descending confidence, unchanged
+assert.deepEqual(g.alternates.map((x) => x.id), ["sarah"]);
 
 console.log("multi-contact checks passed");

@@ -35,9 +35,10 @@ export async function emitLead(
   // row, not create a duplicate. lead_assignments is the tenant-scoped join on top of it.
   let lead = await leads.findByHiringSignalId(hiringSignalId);
   if (!lead) {
-    // The highest-confidence contact is the primary; the others, best first, are the alternates. One contact
-    // gives none, exactly as before multi-contact resolution.
-    const assigned = assignPrimaryAndAlternates(await contacts.listByHiringSignalId(hiringSignalId));
+    // The primary is the best tier's contact nearest the opening (else highest confidence); the others, best
+    // first, are the alternates. One contact gives none, exactly as before multi-contact resolution.
+    const openingLocation = (await hiringSignalRepository(db).findById(hiringSignalId))?.location ?? null;
+    const assigned = assignPrimaryAndAlternates(await contacts.listByHiringSignalId(hiringSignalId), openingLocation);
     if (!assigned) throw new Error(`no contact for hiring_signal ${hiringSignalId} — scoring should have caught this`);
 
     lead = await leads.create({

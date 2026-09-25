@@ -71,8 +71,8 @@ export async function scoreHiringSignal(
   const configuration = await configurations.getActiveForTenant(tenantId);
   if (!configuration) throw new Error(`tenant ${tenantId} has no active configuration`);
 
-  // The same primary the lead will get at emit: highest confidence within the best tier, not just highest overall.
-  const contact = assignPrimaryAndAlternates(await contacts.listByHiringSignalId(hiringSignalId))?.primary ?? null;
+  // The same primary the lead will get at emit: best tier, then near the opening, then highest confidence.
+  const contact = assignPrimaryAndAlternates(await contacts.listByHiringSignalId(hiringSignalId), hiringSignal.location)?.primary ?? null;
 
   // A signal with no contact isn't a lead yet. A contact with no real phone is treated exactly
   // the same way — defensive, read-time check, not a redundant one: it exists specifically so
