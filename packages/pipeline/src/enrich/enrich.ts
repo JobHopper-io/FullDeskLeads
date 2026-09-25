@@ -2,7 +2,7 @@ import { createLogger } from "@fdl/shared";
 import { companyRepository, contactRepository, enrichmentAttemptRepository, hiringSignalRepository } from "@fdl/db";
 import { SeamlessClient, SeamlessPollTimeoutError, type PollResult } from "@fdl/enrichment";
 import { getDb } from "../db.js";
-import { TIER_ORDER, buildTierTitles, selectCandidates, type TieredResult } from "./multiContact.js";
+import { TIER_ORDER, buildTierTitles, humanKey, selectCandidates, type TieredResult } from "./multiContact.js";
 import { siteVsCorporate } from "./geo.js";
 
 const log = createLogger("enrich");
@@ -172,6 +172,10 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
       }),
     );
     searchesRun = searched.filter((x) => x.fresh).length;
+    log.info(
+      { hiringSignalId, domain: company.domain, results: Object.fromEntries(searched.map((x) => [x.tier, `${x.results.length}${x.fresh ? "" : " (shared)"}`])) },
+      "per-tier search results",
+    );
     const searchResults: TieredResult[] = searched.flatMap((x) => x.results.map((r) => ({ ...r, tier: x.tier })));
     if (searchResults.length === 0) {
       log.info({ hiringSignalId, domain: company.domain, tierTitles }, "seamless search returned no candidates");
@@ -240,6 +244,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
     const found: Found[] = [];
     const failures: string[] = [];
     const seenPeople = new Set<string>();
+    const seenHumans = new Set<string>();
     picked.forEach((candidate, i) => {
       const requestId = requestIds[i];
       const res = byRequest.get(requestId);
@@ -274,7 +279,14 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
         failures.push(personId ? "same-person" : "no-contact-id");
         return;
       }
+      // Seamless can hold two records for one human (different contactId, same name and phone): store them once.
+      const human = humanKey(final.contact!.fullName, final.contact!.contactPhone1!);
+      if (seenHumans.has(human)) {
+        failures.push("same-person");
+        return;
+      }
       seenPeople.add(personId);
+      seenHumans.add(human);
       found.push({ candidate, requestId, contact: final.contact!, confidence: parseConfidence(final.contact!.contactPhone1TotalAI), recovered });
     });
 

@@ -53,6 +53,15 @@ export function isPlausibleSiteLead(title: string): boolean {
   return /\b(plant|site) (?:manager|director|superintendent)\b|\bgeneral manager\b|\boperations (?:manager|director)\b|\b(?:manager|director|head) of operations\b|\b(?:vp|vice president)\b.*\boperations\b|\bchief operating officer\b|\bcoo\b/i.test(title);
 }
 
+/**
+ * The same human, however Seamless has them recorded: name plus phone digits. Seamless can hold two records for one
+ * person (different contactId and email, same name, title and phone: Madeline M Steepleton, at both her Crest and
+ * Beta Engineering addresses), which the (hiring_signal_id, source_contact_id) key can't tell apart.
+ */
+export function humanKey(name: string, phone: string): string {
+  return `${name.trim().toLowerCase().replace(/\s+/g, " ")}|${phone.replace(/\D/g, "")}`;
+}
+
 /** Not a tier the searches produce: for a contact whose tier isn't known and can't be guessed safely. Ranks last. */
 export type GuessedTier = ContactTier | "other";
 

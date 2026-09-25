@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {
-  assignPrimaryAndAlternates, buildTierTitles, isPlausibleSiteLead, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
+  assignPrimaryAndAlternates, buildTierTitles, humanKey, isPlausibleSiteLead, matchesCompany, selectCandidates, tierOf, type ContactTier, type TieredResult,
 } from "../packages/pipeline/src/enrich/multiContact.js";
 import { distanceMiles, lookupPlace, siteVsCorporate } from "../packages/pipeline/src/enrich/geo.js";
 import type { SearchContactResult } from "../packages/enrichment/src/index.js";
@@ -96,6 +96,11 @@ assert(sel.rejected[0].reason.startsWith("not a plausible site lead"));
 assert.deepEqual(selectCandidates([...tiered(crestSite.slice(0, 2), "site"), ...hr], ours).picked.map((x) => x.name), ["H1", "H2"]);
 // the same title from the FUNCTION search is unaffected (that filter is for the site tier only)
 assert.equal(selectCandidates(tiered([acme("q1", "Q", "Legal Operations Manager")], "function"), ours).picked.length, 1);
+
+// ── one human, two Seamless records (REAL: Madeline M Steepleton on two signals in the 2026-09-25 re-run) ──
+assert.equal(humanKey("Madeline M Steepleton", "318.446.6031"), humanKey(" madeline  m steepleton", "(318) 446-6031"));
+assert.notEqual(humanKey("Madeline M Steepleton", "318.446.6031"), humanKey("Sarah Ceballos", "318.446.6031"));   // same phone, different person
+assert.notEqual(humanKey("Sarah Ceballos", "318.446.6031"), humanKey("Sarah Ceballos", "318.446.6099"));         // same name, different person
 
 // ── primary = highest confidence within the best available tier ─────────────
 const c = (id: string, conf: number, title: string, tier: ContactTier | null) => ({ id, confidence_score: conf, title, tier });
