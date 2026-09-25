@@ -1,5 +1,5 @@
-import { contactRepository, createServiceClient, leadRepository, type ContactRow } from "@fdl/db";
-import { assignPrimaryAndAlternates, buildTierTitles, deriveJobTitleHints, enrichHiringSignal, getSeamlessCreditSnapshot, tierOf } from "@fdl/pipeline";
+import { contactRepository, createServiceClient, leadRepository, scoreRecordRepository, type ContactRow, type ScoreRecordRow } from "@fdl/db";
+import { assignPrimaryAndAlternates, buildTierTitles, deriveJobTitleHints, enrichHiringSignal, getSeamlessCreditSnapshot, scoreHiringSignal, tierOf } from "@fdl/pipeline";
 import { createLogger, loadEnv } from "@fdl/shared";
 
 // Re-enrich signals whose role was mapped to the wrong family (the role-mapping audit), then fix what points at the
@@ -9,6 +9,9 @@ import { createLogger, loadEnv } from "@fdl/shared";
 //
 //   tsx --env-file=.env scripts/reenrich-signals.ts --ids=<id>,<id> --plan   spends nothing: shows what would run
 //   tsx --env-file=.env scripts/reenrich-signals.ts --ids=<id>,<id>          runs it
+//
+// After a lead's pointers move, its tenant's score is recomputed (free: no Seamless calls) so the stored confidence, and
+// with it the order the recruiter's queue shows, reflects the new primary and not the old one.
 //
 // Deliberately narrow: only the eight roles the audit found mis-mapped, and only signals that already have contacts.
 const AUDITED_TITLES = new Set([
@@ -22,6 +25,7 @@ const log = createLogger("reenrich");
 const db = createServiceClient(loadEnv());
 const contacts = contactRepository(db);
 const leads = leadRepository(db);
+const scoreRecords = scoreRecordRepository(db);
 
 const idsArg = process.argv.find((a) => a.startsWith("--ids="));
 const plan = process.argv.includes("--plan");
@@ -40,7 +44,20 @@ for (const id of ids) {
   if (!AUDITED_TITLES.has(s.role_title)) throw new Error(`refusing ${id}: "${s.role_title}" is not one of the eight audited roles`);
 }
 
-type Snapshot = { signalId: string; role: string; company: string; location: string | null; leadId: string | null; oldContacts: ContactRow[]; oldPrimary: ContactRow | null; oldPrimaryFrom: "lead" | "rule" };
+// Where a lead sits in a tenant's queue, by the same ordering the API uses (apps/api /queue): stored confidence
+// descending (no score record sorts last), then most recently delivered. Due assignments only.
+async function queueRanks(tenantId: string): Promise<{ rank: Map<string, number>; total: number }> {
+  const { data: asg, error: aErr } = await db.from("lead_assignments").select("lead_id, delivered_at, next_action_at").eq("tenant_id", tenantId);
+  if (aErr) throw aErr;
+  const now = Date.now();
+  const due = asg!.filter((a) => !a.next_action_at || Date.parse(a.next_action_at) <= now);
+  const { data: sr } = await db.from("score_records").select("lead_id, confidence_score").eq("tenant_id", tenantId).in("lead_id", due.map((a) => a.lead_id));
+  const conf = new Map((sr ?? []).map((x) => [x.lead_id as string, (x.confidence_score as number | null) ?? -1]));
+  const ordered = [...due].sort((x, y) => (conf.get(y.lead_id) ?? -1) - (conf.get(x.lead_id) ?? -1) || (y.delivered_at ?? "").localeCompare(x.delivered_at ?? ""));
+  return { rank: new Map(ordered.map((a, i) => [a.lead_id as string, i + 1])), total: ordered.length };
+}
+
+type Snapshot = { tenants: string[]; scoreBefore: Map<string, ScoreRecordRow | null>; rankBefore: Map<string, number>; signalId: string; role: string; company: string; location: string | null; leadId: string | null; oldContacts: ContactRow[]; oldPrimary: ContactRow | null; oldPrimaryFrom: "lead" | "rule" };
 const snapshots: Snapshot[] = [];
 for (const id of ids) {
   const s = signals!.find((x) => x.id === id)!;
@@ -49,8 +66,15 @@ for (const id of ids) {
   const { data: lead } = await db.from("leads").select("id, primary_contact_id").eq("hiring_signal_id", id).maybeSingle();
   const fromLead = lead ? oldContacts.find((c) => c.id === lead.primary_contact_id) ?? null : null;
   const company = (s.companies as unknown as { name: string }).name;
+  const tenants = lead ? [...new Set(((await db.from("lead_assignments").select("tenant_id").eq("lead_id", lead.id)).data ?? []).map((a) => a.tenant_id as string))] : [];
+  const scoreBefore = new Map<string, ScoreRecordRow | null>();
+  const rankBefore = new Map<string, number>();
+  for (const t of tenants) {
+    scoreBefore.set(t, await scoreRecords.findByTenantAndHiringSignal(t, id));
+    rankBefore.set(t, (await queueRanks(t)).rank.get(lead!.id) ?? 0);
+  }
   snapshots.push({
-    signalId: id, role: s.role_title, company, location: s.location, leadId: lead?.id ?? null, oldContacts,
+    tenants, scoreBefore, rankBefore, signalId: id, role: s.role_title, company, location: s.location, leadId: lead?.id ?? null, oldContacts,
     oldPrimary: fromLead ?? assignPrimaryAndAlternates(oldContacts, s.location)?.primary ?? null, oldPrimaryFrom: fromLead ? "lead" : "rule",
   });
 }
@@ -66,7 +90,7 @@ for (const snap of snapshots) {
   const paying = (["function", "site", "hr"] as const).filter((t) => tiers[t].length > 0);
   for (const t of paying) searchKeys.add(`${domain}|${tiers[t].join(",")}`);
   worstResearch += 4;
-  console.log(`${snap.company.split(" ")[0].padEnd(10)} ${snap.role.slice(0, 50).padEnd(50)} searches: ${paying.join("+").padEnd(18)} lead: ${snap.leadId ? "YES" : "no "}  old contacts: ${snap.oldContacts.length}`);
+  console.log(`${snap.company.split(" ")[0].padEnd(10)} ${snap.role.slice(0, 50).padEnd(50)} searches: ${paying.join("+").padEnd(18)} lead: ${snap.leadId ? "YES, rescore tenant " + snap.tenants.map((t) => t.slice(0, 4)).join(",") : "no "}  old contacts: ${snap.oldContacts.length}`);
 }
 console.log(`\n${snapshots.length} signals, ${snapshots.filter((s) => s.leadId).length} with a lead. Distinct searches (1 credit each): ${searchKeys.size}. Research: up to ${worstResearch} (duplicates recover free). Worst case ${searchKeys.size + worstResearch} credits.`);
 if (plan) {
@@ -88,7 +112,11 @@ async function runOne(snap: Snapshot): Promise<void> {
   }
   const keep = r.contactIds;
   const superseded = await contacts.supersedeAllExcept(snap.signalId, keep);
-  if (snap.leadId) await leads.setContacts(snap.leadId, keep[0], keep.slice(1, 4));
+  if (snap.leadId) {
+    await leads.setContacts(snap.leadId, keep[0], keep.slice(1, 4));
+    // Recompute this lead's score for the tenant(s) it is assigned to. Free; updates the existing row in place.
+    for (const tenantId of snap.tenants) await scoreHiringSignal(snap.signalId, tenantId);
+  }
   results.set(snap.signalId, { contactIds: keep, superseded, status });
 }
 let next = 0;
@@ -115,6 +143,14 @@ for (const snap of snapshots) {
   console.log(`   corrected set (${active.length}): ${active.map((c) => `${c.name} [${c.tier}]`).join("; ")}`);
   console.log(`   old rows kept but superseded: ${res.superseded.length} (${snap.oldContacts.filter((c) => res.superseded.includes(c.id)).map((c) => c.name).join("; ") || "-"})`);
   if (snap.leadId) {
+    for (const t of snap.tenants) {
+      const b = snap.scoreBefore.get(t) ?? null;
+      const a = await scoreRecords.findByTenantAndHiringSignal(t, snap.signalId);
+      const q = await queueRanks(t);
+      const { data: srAll } = await db.from("score_records").select("id").eq("tenant_id", t).eq("lead_id", snap.leadId);
+      console.log(`   SCORE tenant ${t.slice(0, 4)}: confidence ${b?.confidence_score ?? "none"} -> ${a?.confidence_score ?? "none"} | fit ${b?.fit_score} -> ${a?.fit_score} | freshness ${b?.freshness_score} -> ${a?.freshness_score} | eligible ${b?.eligible} -> ${a?.eligible} | queue position ${snap.rankBefore.get(t)} -> ${q.rank.get(snap.leadId) ?? "?"} of ${q.total} | score records for this lead: ${srAll?.length} (lead_id kept: ${a?.lead_id === snap.leadId ? "yes" : "NO"}) | recomputed ${a?.computed_at?.slice(11, 19)}Z`);
+      if (srAll?.length !== 1 || a?.lead_id !== snap.leadId) problems++;
+    }
     const changed = lead!.primary_contact_id !== snap.oldPrimary?.id;
     const matches = lead!.primary_contact_id === want?.primary.id;
     const stale = [lead!.primary_contact_id, ...lead!.alternate_contact_ids].filter((id: string) => res.superseded.includes(id));
