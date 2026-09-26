@@ -73,7 +73,7 @@ strong, b, th { font-weight: 500; }
 .queue-row { width: 100%; text-align: left; background: none; color: inherit; border: 0; padding: 12px 8px 12px 0; display: grid; gap: 3px; }
 .queue-row:hover .company { text-decoration: underline; text-underline-offset: 3px; }
 .queue-row[aria-current="true"] { box-shadow: inset 3px 0 0 var(--fdl-green); padding-left: 12px; }
-.queue-row .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.queue-row .top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; align-items: baseline; } /* a long tag row drops under the company name instead of squeezing it */
 .queue-row .tags { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .queue-row .tags .state-tag { order: -1; }
 .queue-row .company { font-weight: 500; font-size: 0.875rem; }
@@ -92,7 +92,7 @@ strong, b, th { font-weight: 500; }
 .state-tag.contacted { background: none; border: 1.5px solid var(--fdl-green); color: var(--fdl-green); }
 .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--color-muted); text-transform: capitalize; }
 .tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--fdl-hairline); flex-shrink: 0; }
-.tag.fresh::before, .tag.recent::before { background: var(--fdl-green); }
+.tag.fresh::before, .tag.recent::before, .tag.owner::before { background: var(--fdl-green); }
 .tag.ageing::before { background: var(--color-muted); }
 .tag.stale::before { background: none; box-shadow: inset 0 0 0 1px var(--color-muted); }
 

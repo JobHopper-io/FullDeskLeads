@@ -17,6 +17,13 @@ export interface QueueItem {
   contactId: string;
   /** When this tenant flagged the contact as bad data; null = not flagged. */
   contactFlaggedAt: string | null;
+  /**
+   * The primary contact is function-tier: found by the search for this role's own function (a Maintenance Manager on a
+   * maintenance opening), so the person likely owns the hiring need. False for a site-lead or HR primary (a reasonable
+   * contact, not a confirmed owner) and for contacts with no tier at all (written before tiering existed): "no tier
+   * data" counts as not confirmed, never as a yes. Nothing is guessed from a title.
+   */
+  directReqOwner: boolean;
   /** When the underlying job posting was first seen. */
   signalFirstSeen: string;
   /** 0–1 confidence in the primary contact, and when its phone was verified (null = not verified). */
@@ -65,7 +72,7 @@ interface LeadRow {
   role_intelligence: unknown;
   objections: unknown;
   hiring_signal: { role_title: string; location: string | null; freshness_band: string | null; detected_at: string; company: { name: string } };
-  primary_contact: { name: string; title: string; phone: string | null; email: string | null; confidence_score: number; phone_verified: boolean; verified_at: string | null };
+  primary_contact: { name: string; title: string; phone: string | null; email: string | null; confidence_score: number; phone_verified: boolean; verified_at: string | null; tier: "function" | "site" | "hr" | null };
 }
 
 /** The tenant's lead assignments as QueueItems, best first. dueOnly = the call queue (no future follow-ups). */
@@ -93,7 +100,7 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
     .select(
       `id, why_now, alternate_contact_ids, primary_contact_id, opening_script, role_intelligence, objections,
        hiring_signal:hiring_signals ( role_title, location, freshness_band, detected_at, company:companies ( name ) ),
-       primary_contact:contacts!primary_contact_id ( name, title, phone, email, confidence_score, phone_verified, verified_at )`,
+       primary_contact:contacts!primary_contact_id ( name, title, phone, email, confidence_score, phone_verified, verified_at, tier )`,
     )
     .in("id", leadIds);
   if (leadError) throw leadError;
@@ -156,6 +163,7 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
         contact: { name: lead.primary_contact.name, title: lead.primary_contact.title, phone: lead.primary_contact.phone, email: lead.primary_contact.email },
         contactId: lead.primary_contact_id,
         contactFlaggedAt: flaggedAt.get(lead.primary_contact_id) ?? null,
+        directReqOwner: lead.primary_contact.tier === "function",
         signalFirstSeen: lead.hiring_signal.detected_at,
         contactConfidence: lead.primary_contact.confidence_score,
         phoneVerifiedAt: lead.primary_contact.phone_verified ? lead.primary_contact.verified_at : null,
