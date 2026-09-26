@@ -18,12 +18,13 @@ export interface QueueItem {
   /** When this tenant flagged the contact as bad data; null = not flagged. */
   contactFlaggedAt: string | null;
   /**
-   * The primary contact is function-tier: found by the search for this role's own function (a Maintenance Manager on a
-   * maintenance opening), so the person likely owns the hiring need. False for a site-lead or HR primary (a reasonable
-   * contact, not a confirmed owner) and for contacts with no tier at all (written before tiering existed): "no tier
-   * data" counts as not confirmed, never as a yes. Nothing is guessed from a title.
+   * The primary contact is function-tier: returned by the search for this role's own function (a Maintenance Manager on
+   * a maintenance opening). That is a proxy for owning the hiring need, not confirmation of it, so it is named for what it
+   * verifies. False for a site-lead or HR primary (a reasonable contact, not a function match) and for contacts with no
+   * tier at all (written before tiering existed): "no tier data" counts as not matched, never as a yes. Nothing is
+   * guessed from a title.
    */
-  directReqOwner: boolean;
+  functionMatch: boolean;
   /** When the underlying job posting was first seen. */
   signalFirstSeen: string;
   /** 0–1 confidence in the primary contact, and when its phone was verified (null = not verified). */
@@ -163,7 +164,7 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
         contact: { name: lead.primary_contact.name, title: lead.primary_contact.title, phone: lead.primary_contact.phone, email: lead.primary_contact.email },
         contactId: lead.primary_contact_id,
         contactFlaggedAt: flaggedAt.get(lead.primary_contact_id) ?? null,
-        directReqOwner: lead.primary_contact.tier === "function",
+        functionMatch: lead.primary_contact.tier === "function",
         signalFirstSeen: lead.hiring_signal.detected_at,
         contactConfidence: lead.primary_contact.confidence_score,
         phoneVerifiedAt: lead.primary_contact.phone_verified ? lead.primary_contact.verified_at : null,

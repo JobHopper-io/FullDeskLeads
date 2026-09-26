@@ -4,7 +4,7 @@ import { SIGNAL_TYPE, confidenceLabel, formatDate } from "../../lib/provenance";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import StateTag from "../StateTag";
-import DirectReqOwnerTag from "../DirectReqOwnerTag";
+import FunctionMatchTag from "../FunctionMatchTag";
 
 export type DetailSection = "script" | "role" | "objections";
 
@@ -68,7 +68,7 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
         <div className="l2-role">
           {item.roleTitle}
           {item.location ? ` · ${item.location}` : ""}
-          <DirectReqOwnerTag item={item} />
+          <FunctionMatchTag item={item} />
           {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
           <StateTag state={item.state} />
         </div>

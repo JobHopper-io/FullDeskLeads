@@ -1,6 +1,6 @@
 import type { QueueItem } from "../../lib/types";
 import StateTag from "../StateTag";
-import DirectReqOwnerTag from "../DirectReqOwnerTag";
+import FunctionMatchTag from "../FunctionMatchTag";
 import ContactGlyph from "../ContactGlyph";
 
 // Placeholder until real why-now generation exists (deferred).
@@ -19,7 +19,7 @@ export default function LeadCardLayer1({ item }: { item: QueueItem }) {
       <div className="company">{item.company}</div>
       <div className="row small">
         <span className="contact"><ContactGlyph />{name} · {title}</span>
-        <DirectReqOwnerTag item={item} />
+        <FunctionMatchTag item={item} />
         {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
         <StateTag state={item.state} />
       </div>

@@ -92,7 +92,7 @@ strong, b, th { font-weight: 500; }
 .state-tag.contacted { background: none; border: 1.5px solid var(--fdl-green); color: var(--fdl-green); }
 .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--color-muted); text-transform: capitalize; }
 .tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--fdl-hairline); flex-shrink: 0; }
-.tag.fresh::before, .tag.recent::before, .tag.owner::before { background: var(--fdl-green); }
+.tag.fresh::before, .tag.recent::before, .tag.function-match::before { background: var(--fdl-green); }
 .tag.ageing::before { background: var(--color-muted); }
 .tag.stale::before { background: none; box-shadow: inset 0 0 0 1px var(--color-muted); }
 

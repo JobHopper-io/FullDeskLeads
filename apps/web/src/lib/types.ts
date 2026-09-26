@@ -19,7 +19,7 @@ export interface QueueItem {
   contactId: string;
   contactFlaggedAt: string | null;
   /** The primary contact is function-tier (see apps/api's QueueItem); false for site/HR/untiered. */
-  directReqOwner: boolean;
+  functionMatch: boolean;
   signalFirstSeen: string;
   contactConfidence: number;
   phoneVerifiedAt: string | null;

@@ -1,7 +1,7 @@
 import type { QueueItem } from "../lib/types";
 import { confidenceLabel } from "../lib/provenance";
 import StateTag from "./StateTag";
-import DirectReqOwnerTag from "./DirectReqOwnerTag";
+import FunctionMatchTag from "./FunctionMatchTag";
 import ContactGlyph from "./ContactGlyph";
 
 interface Props {
@@ -19,7 +19,7 @@ export default function QueueList({ items, selectedId, onSelect }: Props) {
             <span className="top">
               <span className="company">{item.company}</span>
               <span className="tags">
-                <DirectReqOwnerTag item={item} />
+                <FunctionMatchTag item={item} />
                 {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
                 <StateTag state={item.state} />
               </span>
