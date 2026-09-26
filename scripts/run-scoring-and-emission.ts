@@ -7,7 +7,11 @@ import { loadEnv, createLogger } from "@fdl/shared";
 // doesn't yet have a score_record for a given tenant, against every real tenant.
 // `--rescore-ineligible` also re-scores signals whose existing score_record is not eligible (after a
 // scoring-rule fix). scoreRecordRepository upserts, so this updates them in place; no Seamless calls.
+// A score is also re-computed when the signal's contacts changed after it was scored (a corrected re-enrichment adds
+// contacts and supersedes others): its stored confidence comes from the primary contact, so it would otherwise be
+// silently reused. `--dry-run` shows what would be scored (new or stale) and changes nothing.
 const rescoreIneligible = process.argv.includes("--rescore-ineligible");
+const dryRun = process.argv.includes("--dry-run");
 const log = createLogger("run-scoring-and-emission");
 const db = createServiceClient(loadEnv());
 
@@ -16,10 +20,17 @@ console.log(`Scoring against ${tenants.length} real tenant(s): ${tenants.map((t)
 
 const { data: withContact, error: contactErr } = await db
   .from("contacts")
-  .select("hiring_signal_id")
+  .select("hiring_signal_id, created_at, superseded_at")
   .not("hiring_signal_id", "is", null);
 if (contactErr) throw contactErr;
 const hiringSignalIdsWithContact = [...new Set(withContact.map((c) => c.hiring_signal_id as string))];
+// When each signal's contacts last changed: a contact written, or one superseded.
+const contactsChangedAt = new Map<string, string>();
+for (const c of withContact) {
+  for (const at of [c.created_at as string, c.superseded_at as string | null]) {
+    if (at && at > (contactsChangedAt.get(c.hiring_signal_id as string) ?? "")) contactsChangedAt.set(c.hiring_signal_id as string, at);
+  }
+}
 console.log(`hiring_signals with a linked contact: ${hiringSignalIdsWithContact.length}`);
 
 const { count: leadsBefore } = await db.from("leads").select("*", { count: "exact", head: true });
@@ -31,15 +42,23 @@ const eligibleTenantsBySignal = new Map<string, string[]>();
 for (const tenant of tenants) {
   const { data: alreadyScored, error: scoredErr } = await db
     .from("score_records")
-    .select("hiring_signal_id")
+    .select("hiring_signal_id, computed_at")
     .eq("tenant_id", tenant.id)
     .not("hiring_signal_id", "is", null)
     .in("eligible", rescoreIneligible ? [true] : [true, false]);
   if (scoredErr) throw scoredErr;
   const alreadyScoredIds = new Set(alreadyScored.map((r) => r.hiring_signal_id as string));
 
-  const targets = hiringSignalIdsWithContact.filter((id) => !alreadyScoredIds.has(id));
-  console.log(`\n${tenant.name}: ${targets.length} signal(s) to score (of ${hiringSignalIdsWithContact.length} with a contact)`);
+  // Scored, but before the signal's contacts last changed: the stored confidence is the old primary's.
+  const staleIds = new Set(
+    alreadyScored.filter((r) => (contactsChangedAt.get(r.hiring_signal_id as string) ?? "") > (r.computed_at as string)).map((r) => r.hiring_signal_id as string),
+  );
+  const targets = hiringSignalIdsWithContact.filter((id) => !alreadyScoredIds.has(id) || staleIds.has(id));
+  console.log(`\n${tenant.name}: ${targets.length} signal(s) to score (of ${hiringSignalIdsWithContact.length} with a contact), ${staleIds.size} of them stale`);
+  if (dryRun) {
+    console.log(`  new: ${targets.length - staleIds.size} | stale (contacts changed after they were scored): ${[...staleIds].map((id) => id.slice(0, 8)).join(", ") || "none"}`);
+    continue;
+  }
 
   let eligible = 0;
   let notEligible = 0;
@@ -62,6 +81,11 @@ for (const tenant of tenants) {
   }
 
   console.log(`  scored: ${targets.length}, eligible: ${eligible}, not eligible: ${notEligible}`);
+}
+
+if (dryRun) {
+  console.log("\n--dry-run: nothing was scored or emitted.");
+  process.exit(0);
 }
 
 const { count: leadsAfter } = await db.from("leads").select("*", { count: "exact", head: true });

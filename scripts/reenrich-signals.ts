@@ -66,12 +66,14 @@ for (const id of ids) {
   const { data: lead } = await db.from("leads").select("id, primary_contact_id").eq("hiring_signal_id", id).maybeSingle();
   const fromLead = lead ? oldContacts.find((c) => c.id === lead.primary_contact_id) ?? null : null;
   const company = (s.companies as unknown as { name: string }).name;
-  const tenants = lead ? [...new Set(((await db.from("lead_assignments").select("tenant_id").eq("lead_id", lead.id)).data ?? []).map((a) => a.tenant_id as string))] : [];
+  // Every tenant that already has a score record for this signal, whether or not a lead exists yet: a stored score
+  // carries the old primary's confidence, so each one is recomputed (records are updated in place, never created).
+  const tenants = [...new Set(((await db.from("score_records").select("tenant_id").eq("hiring_signal_id", id)).data ?? []).map((r) => r.tenant_id as string))];
   const scoreBefore = new Map<string, ScoreRecordRow | null>();
   const rankBefore = new Map<string, number>();
   for (const t of tenants) {
     scoreBefore.set(t, await scoreRecords.findByTenantAndHiringSignal(t, id));
-    rankBefore.set(t, (await queueRanks(t)).rank.get(lead!.id) ?? 0);
+    if (lead) rankBefore.set(t, (await queueRanks(t)).rank.get(lead.id) ?? 0);
   }
   snapshots.push({
     tenants, scoreBefore, rankBefore, signalId: id, role: s.role_title, company, location: s.location, leadId: lead?.id ?? null, oldContacts,
@@ -90,7 +92,7 @@ for (const snap of snapshots) {
   const paying = (["function", "site", "hr"] as const).filter((t) => tiers[t].length > 0);
   for (const t of paying) searchKeys.add(`${domain}|${tiers[t].join(",")}`);
   worstResearch += 4;
-  console.log(`${snap.company.split(" ")[0].padEnd(10)} ${snap.role.slice(0, 50).padEnd(50)} searches: ${paying.join("+").padEnd(18)} lead: ${snap.leadId ? "YES, rescore tenant " + snap.tenants.map((t) => t.slice(0, 4)).join(",") : "no "}  old contacts: ${snap.oldContacts.length}`);
+  console.log(`${snap.company.split(" ")[0].padEnd(10)} ${snap.role.slice(0, 50).padEnd(50)} searches: ${paying.join("+").padEnd(18)} lead: ${snap.leadId ? "YES" : "no "}  rescore tenants: ${snap.tenants.map((t) => t.slice(0, 4)).join(",") || "-"}  old contacts: ${snap.oldContacts.length}`);
 }
 console.log(`\n${snapshots.length} signals, ${snapshots.filter((s) => s.leadId).length} with a lead. Distinct searches (1 credit each): ${searchKeys.size}. Research: up to ${worstResearch} (duplicates recover free). Worst case ${searchKeys.size + worstResearch} credits.`);
 if (plan) {
@@ -112,11 +114,9 @@ async function runOne(snap: Snapshot): Promise<void> {
   }
   const keep = r.contactIds;
   const superseded = await contacts.supersedeAllExcept(snap.signalId, keep);
-  if (snap.leadId) {
-    await leads.setContacts(snap.leadId, keep[0], keep.slice(1, 4));
-    // Recompute this lead's score for the tenant(s) it is assigned to. Free; updates the existing row in place.
-    for (const tenantId of snap.tenants) await scoreHiringSignal(snap.signalId, tenantId);
-  }
+  if (snap.leadId) await leads.setContacts(snap.leadId, keep[0], keep.slice(1, 4));
+  // Recompute the score for every tenant that has one for this signal. Free; updates the existing rows in place.
+  for (const tenantId of snap.tenants) await scoreHiringSignal(snap.signalId, tenantId);
   results.set(snap.signalId, { contactIds: keep, superseded, status });
 }
 let next = 0;
