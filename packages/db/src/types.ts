@@ -85,6 +85,8 @@ export interface HiringSignalRow {
   freshness_band: HiringSignalFreshnessBand | null;
   status: HiringSignalStatus;
   status_reason: string | null;
+  /** When status last changed (migration 0033). Null for any change made before it was tracked; never guessed. */
+  status_changed_at: string | null;
   /** Parsed from the posting (migration 0031); null = the posting did not clearly say. */
   opening_count: number | null;
   shift: string | null;

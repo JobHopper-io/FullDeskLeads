@@ -5,6 +5,7 @@
 //      must NOT expire the signal; gone only when every copy is gone; can't-check is retryable, never expired.
 import assert from "node:assert/strict";
 import { createServiceClient, hiringSignalPostingRepository, scoreRecordRepository, tenantRepository } from "@fdl/db";
+import { hiringSignalRepository } from "@fdl/db";
 import { emitLead, normalizeRawSignal } from "../packages/pipeline/src/index.js";
 import { loadEnv } from "@fdl/shared";
 
@@ -70,11 +71,20 @@ try {
   show("B1 BEFORE  retained copy dead, other copy unknown to us:", JSON.stringify(r1), "status:", await status(before));
   assert.ok("skipped" in r1 && !r1.retryable); assert.equal(await status(before), "expired"); // the bug: live job wrongly expired
 
+  // status_changed_at (migration 0033): stamped by the expiry write, and NOT restamped when the same status is written again.
+  const stamped = async (id: string) => (await db.from("hiring_signals").select("status_changed_at, status_reason").eq("id", id).single()).data!;
+  const t1 = (await stamped(before)).status_changed_at;
+  assert.ok(t1, "expiry must stamp status_changed_at");
+  await hiringSignalRepository(db).setStatus(before, "expired", "reason rewritten");
+  const t2 = await stamped(before);
+  assert.equal(t2.status_changed_at, t1, "same status again: not restamped"); assert.equal(t2.status_reason, "reason rewritten", "but the reason is updated");
+  show("B1 status_changed_at stamped on expiry, kept on same-status rewrite:", t1);
+
   const after = await tempSignal([retainedDead(2), otherLive]);
   const r2 = await silently(() => emitLead(after, tenant.id).catch((e: Error) => ({ passed: e.message })));
   show("B2 AFTER   retained copy dead, other board's copy live:", JSON.stringify(r2).slice(0, 60) + "…", "status:", await status(after));
   assert.ok("passed" in r2 && /no contact/.test(r2.passed as string), "verification must pass and proceed to lead creation (temp signal has no contact)");
-  assert.equal(await status(after), "active");
+  assert.equal(await status(after), "active"); assert.equal((await stamped(after)).status_changed_at, null, "still active: never changed, so null");
 
   const bothGone = await tempSignal([retainedDead(3), { source: "greenhouse", token: live.greenhouse.token, id: "1" }]);
   const r3 = await silently(() => emitLead(bothGone, tenant.id));

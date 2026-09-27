@@ -103,14 +103,20 @@ export function hiringSignalRepository(db: SupabaseClient) {
       return data;
     },
 
-    // Day 6 early filter, extended for the internal-mobility exclusion rule: reason is written
-    // alongside status so a decision like 'excluded' is auditable, not a bare status flip.
+    // Every status write in the pipeline (both filter rules, live-verification expiry) goes through here. The reason is
+    // always written; status_changed_at only when the status actually changes, so re-running a rule on a signal that is
+    // already excluded does not restamp it (migration 0033).
     setStatus: async (id: string, status: HiringSignalStatus, reason?: string | null): Promise<void> => {
-      const { error } = await db
+      const { data: changed, error } = await db
         .from("hiring_signals")
-        .update({ status, status_reason: reason ?? null })
-        .eq("id", id);
+        .update({ status, status_reason: reason ?? null, status_changed_at: new Date().toISOString() })
+        .eq("id", id)
+        .neq("status", status)
+        .select("id");
       if (error) throw error;
+      if (changed.length) return;
+      const { error: reasonError } = await db.from("hiring_signals").update({ status_reason: reason ?? null }).eq("id", id);
+      if (reasonError) throw reasonError;
     },
 
     // Call-sheet facts parsed from the posting (migration 0031). Written every normalize, so a re-fetched posting whose
