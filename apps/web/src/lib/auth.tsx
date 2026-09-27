@@ -22,8 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [seatError, setSeatError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    // Local testing: with VITE_AUTO_LOGIN_* set (apps/web/.env.local only), sign in as that user when there's no
+    // saved session, so the login page never shows. Real token, real API checks; unset the vars to get login back.
+    const email = import.meta.env.VITE_AUTO_LOGIN_EMAIL;
+    const password = import.meta.env.VITE_AUTO_LOGIN_PASSWORD;
+    supabase.auth.getSession().then(async ({ data }) => {
+      const auto = !data.session && email && password ? await supabase.auth.signInWithPassword({ email, password }) : null;
+      setSession(auto?.data.session ?? data.session);
       setSessionLoaded(true);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
