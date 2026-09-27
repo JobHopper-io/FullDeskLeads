@@ -27,6 +27,13 @@ export default function MyDayPage() {
   const current = queue.find((i) => i.id === pickedId) ?? queue[0];
   const rest = queue.filter((i) => i !== current);
 
+  // "Lead 07 of 36": where the recruiter is in today's queue. Leads already worked today that have left the queue
+  // count as behind them, the rest of the queue is ahead, so the total holds steady as they advance. No new data:
+  // it's the same list and the same "worked today" rule the counters use, and each lead is counted once.
+  const inQueue = new Set(queue.map((i) => i.id));
+  const doneToday = items!.filter((i) => i.lastEvent && Date.parse(i.lastEvent.occurredAt) >= today && !inQueue.has(i.id)).length;
+  const position = current ? { n: doneToday + queue.indexOf(current) + 1, total: doneToday + queue.length } : undefined;
+
   return (
     <div className="my-day">
       <dl className="counters">
@@ -43,6 +50,7 @@ export default function MyDayPage() {
             <LeadCard
               key={current.id}
               item={current}
+              position={position}
               submitLabel="Save and next"
               onLogged={(event) => logged(current, event)}
               onExpand={(section) => navigate(`/leads/${current.id}?section=${section}`)}
