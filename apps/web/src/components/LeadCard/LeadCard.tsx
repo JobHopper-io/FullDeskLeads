@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import LeadCardLayer1 from "./LeadCardLayer1";
@@ -24,11 +25,15 @@ const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width),
 export default function LeadCard({ item, onLogged, onExpand, submitLabel, position }: Props) {
   return (
     <article className="lead-card">
-      {position && (
-        <header className="card-position eyebrow" aria-label={`Lead ${position.n} of ${position.total} in today's queue`}>
-          Lead {pad(position.n, String(position.total).length)} of {pad(position.total, 2)}
-        </header>
-      )}
+      <div className="card-top">
+        {position && (
+          <header className="card-position eyebrow" aria-label={`Lead ${position.n} of ${position.total} in today's queue`}>
+            Lead {pad(position.n, String(position.total).length)} of {pad(position.total, 2)}
+          </header>
+        )}
+        {/* The same lead as a step-by-step call with the words written out (Guided Sheet). */}
+        <Link className="card-guided" to={`/leads/${item.id}/guided`}>Guided call</Link>
+      </div>
       <LeadCardLayer1 item={item} />
       <OutcomePanel item={item} onLogged={onLogged} submitLabel={submitLabel} />
       <div className="card-actions">

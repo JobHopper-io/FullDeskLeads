@@ -265,3 +265,15 @@ strong, b, th { font-weight: 500; }
 .guided-answer:focus-visible { box-shadow: 0 0 0 2px var(--fdl-green); border-radius: var(--fdl-radius); }
 .guided-more { margin-top: 14px; }
 .guided-outcome { margin-top: 20px; scroll-margin-top: var(--l2-top, 160px); }
+
+/* Intelligence | Guided: two views of one lead, in both lead pages' headers. */
+.view-toggle { display: inline-flex; border: 1px solid var(--fdl-green); border-radius: var(--fdl-radius); overflow: hidden; }
+.view-toggle a { padding: 5px 14px; font-size: 0.8125rem; font-weight: 500; color: var(--fdl-green); text-decoration: none; }
+.view-toggle a + a { border-left: 1px solid var(--fdl-green); }
+.view-toggle a[aria-current="page"] { background: var(--fdl-green); color: var(--fdl-ivory); }
+.view-toggle a:not([aria-current]):hover { background: var(--fdl-green-tint-08); }
+/* My Day card: the Guided call entry point sits in the top row, opposite the queue position. */
+.lead-card .card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 30px; }
+.card-guided { margin-left: auto; border: 1px solid var(--fdl-green); color: var(--fdl-green); border-radius: var(--fdl-radius); padding: 6px 14px; font-size: 0.8125rem; font-weight: 500; text-decoration: none; }
+.card-guided::after { content: " →"; }
+.card-guided:hover { background: var(--fdl-green); color: var(--fdl-ivory); }

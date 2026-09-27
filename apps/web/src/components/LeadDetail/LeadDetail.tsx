@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
 import { apiPost } from "../../lib/apiClient";
 import { SIGNAL_TYPE, confidenceLabel, formatDate } from "../../lib/provenance";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import StateTag from "../StateTag";
 import FunctionMatchTag from "../FunctionMatchTag";
+import ViewToggle from "../ViewToggle";
 
 export type DetailSection = "script" | "role" | "objections";
 
@@ -64,7 +64,7 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
       <div className="l2-top" ref={topRef}>
         <div className="l2-top-row">
           <button className="link-button" onClick={onBack}>← Back</button>
-          <Link className="link-button" to={`/leads/${item.id}/guided`}>Guided view</Link>
+          <ViewToggle id={item.id} current="intelligence" />
         </div>
         <h2 className="l2-company">{item.company}</h2>
         <div className="l2-role">

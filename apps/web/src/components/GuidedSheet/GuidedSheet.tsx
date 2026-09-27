@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
+import ViewToggle from "../ViewToggle";
 import { Generated, Placeholder } from "../LeadDetail/LeadDetail";
 
 interface Props {
@@ -79,14 +79,14 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
       <div className="l2-top">
         <div className="l2-top-row">
           <button className="link-button" onClick={onBack}>← Back</button>
-          <Link className="link-button" to={`/leads/${item.id}`}>Intelligence view</Link>
+          <ViewToggle id={item.id} current="guided" />
         </div>
         <div className="guided-head">
           <div>
             <h2 className="l2-company">{item.company}</h2>
             <div className="l2-role">
               {item.roleTitle}
-              {item.location ? ` · ${item.location}` : ""} · Guided view
+              {item.location ? ` · ${item.location}` : ""}
             </div>
           </div>
           <div className="guided-call">
