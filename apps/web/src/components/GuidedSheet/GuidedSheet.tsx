@@ -1,0 +1,194 @@
+import { useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router";
+import type { InteractionEvent, QueueItem } from "../../lib/types";
+import OutcomePanel from "../OutcomePanel";
+import { Generated, Placeholder } from "../LeadDetail/LeadDetail";
+
+interface Props {
+  item: QueueItem;
+  onBack: () => void;
+  onLogged: (event: InteractionEvent) => void;
+}
+
+type StepState = "done" | "live" | "later";
+
+// The four call stages (spec 9.2). `cue` is the instruction to the caller, not words to say.
+const STEPS: { label: string; cue: string; words: (item: QueueItem) => ReactNode }[] = [
+  {
+    label: "Open",
+    cue: "Say",
+    words: (i) => (i.openingScript ? <p className="guided-words">{i.openingScript}</p> : <Placeholder>Opening script isn't generated yet.</Placeholder>),
+  },
+  {
+    label: "Show your work",
+    cue: "Pick one, ask it as a question",
+    words: (i) =>
+      i.roleIntelligence != null ? <Generated value={i.roleIntelligence} /> : <Placeholder>Show-your-work questions aren't generated yet.</Placeholder>,
+  },
+  {
+    label: "Stop and ask",
+    cue: "Now stop talking. The job order is in their answers. Ask, then wait.",
+    words: () => <Placeholder>Discovery questions aren't generated yet.</Placeholder>,
+  },
+  {
+    label: "Light close",
+    cue: "Don't leave without asking",
+    words: () => <Placeholder>The close isn't generated yet.</Placeholder>,
+  },
+];
+
+// The two interruptions the spec handles explicitly. Real objections join them once generation fills `objections`.
+const INTERRUPTIONS = [
+  { key: "busy", label: "“I'm busy”" },
+  { key: "who", label: "“Who is this?”" },
+];
+
+const stateOf = (index: number, live: number): StepState => (index < live ? "done" : index === live ? "live" : "later");
+
+// Format 2 (spec 9): the same lead as Layer 2, rendered as a stepped call runner for a caller who needs the words.
+// One stage is live at a time; earlier ones are dimmed, later ones greyed. Outcome logging is the same panel as Layer 2.
+export default function GuidedSheet({ item, onBack, onLogged }: Props) {
+  const [live, setLive] = useState(0);
+  const [openAnswer, setOpenAnswer] = useState<string | null>(null);
+  const cardRefs = useRef<(HTMLElement | null)[]>([]);
+  const answerRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const firstObjection = useRef<HTMLButtonElement>(null);
+  const outcomeRef = useRef<HTMLDivElement>(null);
+  const { phone, name, title } = item.contact;
+
+  const goTo = (index: number) => {
+    setLive(index);
+    cardRefs.current[index]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+  // Tap an objection: its words open and take focus, without losing the caller's place in the steps.
+  const jumpTo = (key: string) => {
+    setOpenAnswer((open) => (open === key ? null : key));
+    requestAnimationFrame(() => {
+      const answer = answerRefs.current[key];
+      answer?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      answer?.focus();
+    });
+  };
+  const logResult = () => {
+    outcomeRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    outcomeRef.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+  };
+
+  return (
+    <div className="l2 guided">
+      <div className="l2-top">
+        <div className="l2-top-row">
+          <button className="link-button" onClick={onBack}>← Back</button>
+          <Link className="link-button" to={`/leads/${item.id}`}>Intelligence view</Link>
+        </div>
+        <div className="guided-head">
+          <div>
+            <h2 className="l2-company">{item.company}</h2>
+            <div className="l2-role">
+              {item.roleTitle}
+              {item.location ? ` · ${item.location}` : ""} · Guided view
+            </div>
+          </div>
+          <div className="guided-call">
+            <span className="guided-contact">{name}<span className="cell-sub">{title}</span></span>
+            {phone ? <a className="l2-phone" href={`tel:${phone.replace(/[^\d+]/g, "")}`}>{phone}</a> : <span className="l2-phone missing">No phone on file</span>}
+            <button className="outcome-button" onClick={logResult}>Log the result</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="guided-cols">
+        <div className="guided-left">
+          <nav aria-label="Call stages">
+            <h3 className="eyebrow">Call stages</h3>
+            <ol className="guided-rail">
+              {STEPS.map((step, i) => (
+                <li key={step.label}>
+                  <button className="guided-step-btn" data-state={stateOf(i, live)} aria-current={i === live ? "step" : undefined} onClick={() => goTo(i)}>
+                    <span className="guided-num" aria-hidden>{i < live ? "✓" : i + 1}</span>
+                    {step.label}
+                    {i < live && <span className="guided-done">Done</span>}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </nav>
+          <section>
+            <h3 className="eyebrow">The plant, in one line</h3>
+            <Placeholder>Plant descriptor isn't generated yet.</Placeholder>
+          </section>
+          <section className="guided-coach">
+            <h3 className="eyebrow">Coach note</h3>
+            <p>Ask it, don't state it. They've run this plant for years — you're checking your understanding, not telling them their business.</p>
+          </section>
+        </div>
+
+        <div className="guided-steps">
+          {STEPS.map((step, i) => {
+            const state = stateOf(i, live);
+            return (
+              <section key={step.label} ref={(el) => { cardRefs.current[i] = el; }} className="guided-card" data-state={state} aria-current={state === "live" ? "step" : undefined}>
+                <h3 className="guided-eyebrow">
+                  {i + 1} · {step.label} — {step.cue}
+                  {state === "live" && <span className="guided-count">Step {i + 1} of {STEPS.length}</span>}
+                </h3>
+                {step.words(item)}
+                {state === "live" && (
+                  <div className="guided-actions">
+                    {i < STEPS.length - 1 ? (
+                      <button className="guided-next" onClick={() => goTo(i + 1)}>They answered — next step</button>
+                    ) : (
+                      <button className="guided-next" onClick={logResult}>Log the result</button>
+                    )}
+                    <button className="guided-secondary" onClick={() => firstObjection.current?.focus()}>They pushed back</button>
+                    {i > 0 && <button className="guided-secondary" onClick={() => goTo(i - 1)}>Back a step</button>}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+
+        <div className="guided-right">
+          <section>
+            <h3 className="eyebrow">If they push back — tap to jump</h3>
+            <div className="guided-objections">
+              {INTERRUPTIONS.map((o, idx) => (
+                <div key={o.key}>
+                  <button
+                    ref={idx === 0 ? firstObjection : undefined}
+                    className="guided-objection"
+                    aria-expanded={openAnswer === o.key}
+                    aria-controls={`answer-${o.key}`}
+                    onClick={() => jumpTo(o.key)}
+                  >
+                    {o.label}
+                  </button>
+                  {openAnswer === o.key && (
+                    <div id={`answer-${o.key}`} className="guided-answer" tabIndex={-1} ref={(el) => { answerRefs.current[o.key] = el; }}>
+                      <Placeholder>{`The response to ${o.label} isn't generated yet.`}</Placeholder>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {item.objections != null && (
+              <div className="guided-more">
+                <h4 className="eyebrow">Other objections</h4>
+                <Generated value={item.objections} />
+              </div>
+            )}
+          </section>
+          <section>
+            <h3 className="eyebrow">The gap</h3>
+            <Placeholder>Gap analysis isn't generated yet.</Placeholder>
+          </section>
+        </div>
+      </div>
+
+      <div ref={outcomeRef} className="guided-outcome">
+        <OutcomePanel item={item} onLogged={onLogged} />
+      </div>
+    </div>
+  );
+}

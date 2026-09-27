@@ -7,6 +7,7 @@ import LoginPage from "./pages/LoginPage";
 import MyDayPage from "./pages/MyDayPage";
 import NewLeadsPage from "./pages/NewLeadsPage";
 import LeadDetailPage from "./pages/LeadDetailPage";
+import GuidedSheetPage from "./pages/GuidedSheetPage";
 import FollowUpsPage from "./pages/FollowUpsPage";
 import HistoryPage from "./pages/HistoryPage";
 import OpportunitiesPage from "./pages/OpportunitiesPage";
@@ -70,6 +71,7 @@ function Shell() {
               <Route path="/my-day" element={<Loaded><MyDayPage /></Loaded>} />
               <Route path="/leads" element={<Loaded><NewLeadsPage /></Loaded>} />
               <Route path="/leads/:id" element={<Loaded><LeadDetailPage /></Loaded>} />
+              <Route path="/leads/:id/guided" element={<Loaded><GuidedSheetPage /></Loaded>} />
               <Route path="/follow-ups" element={<Loaded><FollowUpsPage /></Loaded>} />
               <Route path="/history" element={<Loaded><HistoryPage /></Loaded>} />
               <Route path="/opportunities" element={<OpportunitiesPage />} />

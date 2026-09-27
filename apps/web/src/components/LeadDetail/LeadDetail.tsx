@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import { apiPost } from "../../lib/apiClient";
 import { SIGNAL_TYPE, confidenceLabel, formatDate } from "../../lib/provenance";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
@@ -19,12 +20,12 @@ interface Props {
 }
 
 // Shown wherever intelligence generation hasn't produced anything yet (same idea as the card's why-now line).
-function Placeholder({ children }: { children: string }) {
+export function Placeholder({ children }: { children: string }) {
   return <p className="l2-placeholder">{children}</p>;
 }
 
 // role_intelligence / objections have no defined shape until generation exists; show it raw rather than invent one.
-const Generated = ({ value }: { value: unknown }) => <pre className="l2-raw">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>;
+export const Generated = ({ value }: { value: unknown }) => <pre className="l2-raw">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>;
 
 // Layer 2 (spec 11.2): header + contact block pinned at the top so the phone number is never lost;
 // contact/provenance left, script + role intelligence + alternates centre, objections right.
@@ -63,6 +64,7 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
       <div className="l2-top" ref={topRef}>
         <div className="l2-top-row">
           <button className="link-button" onClick={onBack}>← Back</button>
+          <Link className="link-button" to={`/leads/${item.id}/guided`}>Guided view</Link>
         </div>
         <h2 className="l2-company">{item.company}</h2>
         <div className="l2-role">
