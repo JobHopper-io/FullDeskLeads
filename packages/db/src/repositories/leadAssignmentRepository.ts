@@ -1,6 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LeadAssignmentRow } from "../types.js";
 
+/** The states a recruiter can still work (the web's isActive). expired / suppressed are terminal. */
+export const WORKABLE_ASSIGNMENT_STATES = ["new", "viewed", "contacted"] as const;
+
+/** An assignment a recruiter can still work, with its signal's current status: what the lead sweep re-checks. */
+export interface WorkableAssignment {
+  id: string;
+  tenant_id: string;
+  state: string;
+  lead_id: string;
+  hiring_signal_id: string;
+  signal_status: string;
+  role_title: string;
+  company: string;
+}
+
 export function leadAssignmentRepository(db: SupabaseClient) {
   return {
     // Day 10 emit: the tenant-scoped join between a global lead and this tenant. A lead can
@@ -39,6 +54,40 @@ export function leadAssignmentRepository(db: SupabaseClient) {
       const { data, error } = await db.from("lead_assignments").select("*").eq("tenant_id", tenantId);
       if (error) throw error;
       return data;
+    },
+
+    // Lead sweep: every assignment still workable, with the status of the signal it was emitted from.
+    listWorkable: async (): Promise<WorkableAssignment[]> => {
+      const { data, error } = await db
+        .from("lead_assignments")
+        .select("id, tenant_id, state, lead_id, leads(hiring_signal_id, hiring_signals(status, role_title, companies(name)))")
+        .in("state", WORKABLE_ASSIGNMENT_STATES);
+      if (error) throw error;
+      type Joined = { id: string; tenant_id: string; state: string; lead_id: string; leads: { hiring_signal_id: string; hiring_signals: { status: string; role_title: string; companies: { name: string } } } };
+      return (data as unknown as Joined[]).map((a) => ({
+        id: a.id,
+        tenant_id: a.tenant_id,
+        state: a.state,
+        lead_id: a.lead_id,
+        hiring_signal_id: a.leads.hiring_signal_id,
+        signal_status: a.leads.hiring_signals.status,
+        role_title: a.leads.hiring_signals.role_title,
+        company: a.leads.hiring_signals.companies.name,
+      }));
+    },
+
+    // Lead sweep: a lead whose signal is no longer valid stops being workable for every tenant it was assigned to. Only
+    // the assignment's state moves. interaction_events (the recruiter's call history) and next_action_at are untouched,
+    // and the state guard means an assignment that reached a terminal state in the meantime is left alone.
+    expireWorkableForLead: async (leadId: string): Promise<string[]> => {
+      const { data, error } = await db
+        .from("lead_assignments")
+        .update({ state: "expired", updated_at: new Date().toISOString() })
+        .eq("lead_id", leadId)
+        .in("state", WORKABLE_ASSIGNMENT_STATES)
+        .select("id");
+      if (error) throw error;
+      return data.map((r) => r.id as string);
     },
 
     // Day 13 lead card, Layer 1 fields only: company name, contact name/title/phone,

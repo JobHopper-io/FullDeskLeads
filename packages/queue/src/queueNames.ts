@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
   SELECT_CONTACT: "select-contact",
   SCORE: "score",
   EMIT: "emit",
+  SWEEP: "sweep",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

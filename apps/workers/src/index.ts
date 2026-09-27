@@ -9,6 +9,8 @@ import { createEnrichWorker } from "./workers/enrich.worker.js";
 import { createSelectContactWorker } from "./workers/select-contact.worker.js";
 import { createScoreWorker } from "./workers/score.worker.js";
 import { createEmitWorker } from "./workers/emit.worker.js";
+import { createSweepWorker } from "./workers/sweep.worker.js";
+import { registerSchedules } from "./scheduler.js";
 
 const log = createLogger("workers");
 
@@ -20,6 +22,8 @@ createEnrichWorker(log);
 createSelectContactWorker(log);
 createScoreWorker(log);
 createEmitWorker(log);
+createSweepWorker(log);
+await registerSchedules({ sweep: createQueue(QUEUE_NAMES.SWEEP) });
 
 const activeQueues = Object.values(QUEUE_NAMES);
 log.info({ queues: activeQueues }, `all ${activeQueues.length} pipeline-stage workers listening`);

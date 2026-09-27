@@ -2,39 +2,17 @@ import { createLogger } from "@fdl/shared";
 import {
   contactRepository,
   exclusionRepository,
-  hiringSignalPostingRepository,
   hiringSignalRepository,
   leadAssignmentRepository,
   leadRepository,
   scoreRecordRepository,
 } from "@fdl/db";
 import { CONTRACT_VERSION } from "@fdl/contracts";
-import { combineLiveness, getSource, type PostingLiveness } from "@fdl/sources";
 import { getDb } from "../db.js";
 import { assignPrimaryAndAlternates } from "../enrich/multiContact.js";
+import { checkPostingStillLive, expireGonePosting } from "../verify/verifyLive.js";
 
 const log = createLogger("emit");
-
-/**
- * Re-hits the source board(s) (same endpoints ingest uses). The same real job can be on more than one board
- * (cross-source dedup keeps every copy, migration 0030), so it is live if ANY copy is and gone only when every
- * copy is confirmed gone — the retained copy dying must not expire a job still live on the other board. Anything that
- * stops us from checking — unreachable source, dead board token, no recorded copy — is "unknown", never "gone".
- */
-async function checkPostingStillLive(hiringSignalId: string): Promise<PostingLiveness> {
-  const copies = await hiringSignalPostingRepository(getDb()).listByHiringSignalId(hiringSignalId);
-  if (copies.length === 0) {
-    log.warn({ hiringSignalId }, "no recorded source posting to re-verify this signal under — treating as unknown, not gone");
-    return "unknown";
-  }
-  const results: PostingLiveness[] = [];
-  for (const copy of copies) {
-    const result = await getSource(copy.source).checkPosting(copy.source_token, copy.source_posting_id);
-    if (result === "live") return "live"; // no need to hit the other boards
-    results.push(result);
-  }
-  return combineLiveness(results);
-}
 
 /** `retryable` marks a skip that is only "we couldn't check" — the caller should try this signal again, not drop it. */
 export async function emitLead(
@@ -61,7 +39,7 @@ export async function emitLead(
   if (!existingLead || !(await leadAssignments.findByTenantAndLead(tenantId, existingLead.id))) {
     const liveness = await checkPostingStillLive(hiringSignalId);
     if (liveness === "gone") {
-      await hiringSignalRepository(db).setStatus(hiringSignalId, "expired", `posting-gone: no longer on source board at ${new Date().toISOString()}`);
+      await expireGonePosting(hiringSignalId);
       log.info({ hiringSignalId, tenantId }, "posting is no longer live on its source board — expired, not emitting");
       return { skipped: true, reason: "expired: posting no longer live" };
     }

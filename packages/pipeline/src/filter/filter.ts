@@ -70,34 +70,31 @@ export function matchStaffingFirmName(companyName: string): string | null {
   return companyName.match(STAFFING_NAME_PATTERN)?.[0].toLowerCase() ?? null;
 }
 
+/**
+ * Read-only: the reason a signal should be excluded under the filter rules right now (role-title patterns, then the
+ * staffing-firm company name), or null. The single decision point shared by the filter stage and the lead sweep.
+ */
+export async function filterReasonFor(hiringSignalId: string): Promise<string | null> {
+  const db = getDb();
+  const hiringSignal = await hiringSignalRepository(db).findById(hiringSignalId);
+  if (!hiringSignal) throw new Error(`hiring_signal ${hiringSignalId} not found`);
+
+  const titleReason = matchInternalMobilityPattern(hiringSignal.role_title);
+  if (titleReason) return titleReason;
+
+  const company = await companyRepository(db).findById(hiringSignal.company_id);
+  const staffingWord = company ? matchStaffingFirmName(company.name) : null;
+  return staffingWord ? `staffing-firm: company name "${company?.name}" matches "${staffingWord}"` : null;
+}
+
 export async function filterHiringSignal(hiringSignalId: string): Promise<{
   excluded: boolean;
   reason: string | null;
 }> {
-  const db = getDb();
-  const hiringSignals = hiringSignalRepository(db);
+  const reason = await filterReasonFor(hiringSignalId);
+  if (!reason) return { excluded: false, reason: null };
 
-  const hiringSignal = await hiringSignals.findById(hiringSignalId);
-  if (!hiringSignal) throw new Error(`hiring_signal ${hiringSignalId} not found`);
-
-  const reason = matchInternalMobilityPattern(hiringSignal.role_title);
-  if (reason) {
-    await hiringSignals.setStatus(hiringSignalId, "excluded", reason);
-    log.info(
-      { hiringSignalId, roleTitle: hiringSignal.role_title, reason },
-      "excluded hiring_signal — internal-mobility pattern, not a real external opening",
-    );
-    return { excluded: true, reason };
-  }
-
-  const company = await companyRepository(db).findById(hiringSignal.company_id);
-  const staffingWord = company ? matchStaffingFirmName(company.name) : null;
-  if (staffingWord) {
-    const staffingReason = `staffing-firm: company name "${company?.name}" matches "${staffingWord}"`;
-    await hiringSignals.setStatus(hiringSignalId, "excluded", staffingReason);
-    log.info({ hiringSignalId, companyName: company?.name, reason: staffingReason }, "excluded hiring_signal — hiring company is a staffing/recruiting firm");
-    return { excluded: true, reason: staffingReason };
-  }
-
-  return { excluded: false, reason: null };
+  await hiringSignalRepository(getDb()).setStatus(hiringSignalId, "excluded", reason);
+  log.info({ hiringSignalId, reason }, "excluded hiring_signal — not a real external opening for this product");
+  return { excluded: true, reason };
 }

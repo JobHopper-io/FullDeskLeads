@@ -9,3 +9,5 @@ export * from "./enrich/multiContact.js";
 export * from "./select-contact/selectContact.js";
 export * from "./score/score.js";
 export * from "./emit/emit.js";
+export * from "./verify/verifyLive.js";
+export * from "./sweep/sweep.js";
