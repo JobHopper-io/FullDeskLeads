@@ -4,6 +4,7 @@ import {
   sourceCompanyRepository,
   companyRepository,
   hiringSignalRepository,
+  hiringSignalPostingRepository,
   type HiringSignalFreshnessBand,
 } from "@fdl/db";
 import { rawPostingSchema } from "@fdl/contracts";
@@ -104,6 +105,7 @@ export async function normalizeRawSignal(
   const sourceCompanies = sourceCompanyRepository(db);
   const companies = companyRepository(db);
   const hiringSignals = hiringSignalRepository(db);
+  const postings = hiringSignalPostingRepository(db);
 
   const rawSignal = await rawSignals.findById(rawSignalId);
   if (!rawSignal) throw new Error(`raw_signal ${rawSignalId} not found`);
@@ -208,6 +210,14 @@ export async function normalizeRawSignal(
   }
 
   if (duplicate) {
+    // Keep this copy's identity: the other board's posting can stay live after the retained one dies, and emit-time
+    // live re-verification checks every recorded copy (migration 0030).
+    await postings.add({
+      hiringSignalId: duplicate.hiringSignalId,
+      source: rawSignal.source,
+      sourceToken: rawSignal.source_token,
+      sourcePostingId: posting.sourceJobId,
+    });
     await rawSignals.markProcessed(rawSignalId);
     log.info(
       { rawSignalId, companyId, hiringSignalId: duplicate.hiringSignalId },
@@ -225,6 +235,13 @@ export async function normalizeRawSignal(
     source: rawSignal.source,
     sourcePostingId: posting.sourceJobId,
     postedDate: posting.postedDate,
+  });
+
+  await postings.add({
+    hiringSignalId: hiringSignal.id,
+    source: rawSignal.source,
+    sourceToken: rawSignal.source_token,
+    sourcePostingId: posting.sourceJobId,
   });
 
   const referenceDate = posting.postedDate ? new Date(posting.postedDate) : new Date(hiringSignal.detected_at);

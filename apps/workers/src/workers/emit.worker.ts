@@ -9,6 +9,10 @@ export function createEmitWorker(log: Logger): Worker<EmitJobPayload> {
     const { hiringSignalId, tenantId } = job.data;
     const result = await emitLead(hiringSignalId, tenantId);
 
+    if ("skipped" in result && result.retryable) {
+      // Throwing hands the job to BullMQ's attempts/backoff; a transient source failure must not silently drop it.
+      throw new Error(`emit deferred for ${hiringSignalId}: ${result.reason}`);
+    }
     if ("skipped" in result) {
       log.info({ stage: "emit", jobId: job.id, hiringSignalId, tenantId, reason: result.reason }, "emission skipped");
     } else {

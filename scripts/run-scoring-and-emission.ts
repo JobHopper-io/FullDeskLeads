@@ -42,12 +42,14 @@ const eligibleTenantsBySignal = new Map<string, string[]>();
 for (const tenant of tenants) {
   const { data: alreadyScored, error: scoredErr } = await db
     .from("score_records")
-    .select("hiring_signal_id, computed_at")
+    .select("hiring_signal_id, computed_at, lead_id, eligible")
     .eq("tenant_id", tenant.id)
     .not("hiring_signal_id", "is", null)
     .in("eligible", rescoreIneligible ? [true] : [true, false]);
   if (scoredErr) throw scoredErr;
-  const alreadyScoredIds = new Set(alreadyScored.map((r) => r.hiring_signal_id as string));
+  // Eligible but never emitted (no lead_id) is not "done": emit skips a signal whose source couldn't be reached to
+  // re-verify it (not expired), and that signal must be picked up again here rather than lost.
+  const alreadyScoredIds = new Set(alreadyScored.filter((r) => !(r.eligible && !r.lead_id)).map((r) => r.hiring_signal_id as string));
 
   // Scored, but before the signal's contacts last changed: the stored confidence is the old primary's.
   const staleIds = new Set(

@@ -1,5 +1,6 @@
 import { createLogger } from "@fdl/shared";
 import type { RawPosting, SignalSource } from "../SignalSource.interface.js";
+import { checkLiveness } from "../liveness.js";
 
 const log = createLogger("lever-source");
 
@@ -36,5 +37,17 @@ export const LeverSource: SignalSource = {
       postedDate: posting.createdAt ? new Date(posting.createdAt).toISOString().slice(0, 10) : null,
       rawPayload: posting,
     }));
+  },
+
+  checkPosting(token, sourceJobId, fetchFn) {
+    const board = `https://api.lever.co/v0/postings/${encodeURIComponent(token)}`;
+    return checkLiveness(
+      {
+        postingUrl: `${board}/${encodeURIComponent(sourceJobId)}`,
+        boardUrl: `${board}?mode=json`,
+        boardHasPosting: (body) => (body as LeverPosting[]).some((posting) => posting.id === sourceJobId),
+      },
+      fetchFn,
+    );
   },
 };

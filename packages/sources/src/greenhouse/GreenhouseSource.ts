@@ -1,5 +1,6 @@
 import { createLogger } from "@fdl/shared";
 import type { RawPosting, SignalSource } from "../SignalSource.interface.js";
+import { checkLiveness } from "../liveness.js";
 
 const log = createLogger("greenhouse-source");
 
@@ -42,5 +43,17 @@ export const GreenhouseSource: SignalSource = {
       postedDate: (job.first_published ?? job.updated_at ?? "").slice(0, 10) || null,
       rawPayload: job,
     }));
+  },
+
+  checkPosting(token, sourceJobId, fetchFn) {
+    const board = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(token)}`;
+    return checkLiveness(
+      {
+        postingUrl: `${board}/jobs/${encodeURIComponent(sourceJobId)}`,
+        boardUrl: `${board}/jobs`,
+        boardHasPosting: (body) => (body as GreenhouseJobsResponse).jobs.some((job) => String(job.id) === sourceJobId),
+      },
+      fetchFn,
+    );
   },
 };

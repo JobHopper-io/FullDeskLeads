@@ -88,6 +88,15 @@ export interface HiringSignalRow {
   created_at: string;
 }
 
+/** One board copy of a hiring_signal's real job (migration 0030): the retained posting plus every cross-source duplicate. */
+export interface HiringSignalPostingRow {
+  hiring_signal_id: string;
+  source: string;
+  source_token: string;
+  source_posting_id: string;
+  created_at: string;
+}
+
 export interface ContactRow {
   id: string;
   company_id: string;
