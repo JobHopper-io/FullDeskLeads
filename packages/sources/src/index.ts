@@ -3,3 +3,4 @@ export * from "./greenhouse/GreenhouseSource.js";
 export * from "./lever/LeverSource.js";
 export * from "./registry.js";
 export * from "./liveness.js";
+export * from "./jobDetails.js";

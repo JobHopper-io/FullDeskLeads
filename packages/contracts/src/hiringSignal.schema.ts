@@ -16,6 +16,14 @@ export const hiringSignalSchema = z.object({
   detectedAt: z.string(),
   freshnessBand: hiringSignalFreshnessBandSchema.nullable(),
   status: hiringSignalStatusSchema,
+  // Parsed from the posting (migration 0031); null = the posting did not clearly say.
+  openingCount: z.number().int().positive().nullable(),
+  shift: z.string().nullable(),
+  payMin: z.number().nullable(),
+  payMax: z.number().nullable(),
+  payInterval: z.enum(["hour", "year"]).nullable(),
+  payCurrency: z.string().regex(/^[A-Z]{3}$/).nullable(),
+  payContext: z.string().nullable(),
 });
 
 export type HiringSignalFreshnessBand = z.infer<typeof hiringSignalFreshnessBandSchema>;

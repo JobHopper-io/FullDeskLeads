@@ -85,6 +85,15 @@ export interface HiringSignalRow {
   freshness_band: HiringSignalFreshnessBand | null;
   status: HiringSignalStatus;
   status_reason: string | null;
+  /** Parsed from the posting (migration 0031); null = the posting did not clearly say. */
+  opening_count: number | null;
+  shift: string | null;
+  pay_min: number | null;
+  pay_max: number | null;
+  pay_interval: "hour" | "year" | null;
+  pay_currency: string | null;
+  /** The source's own pay description, verbatim (migration 0032); null when the source has none. */
+  pay_context: string | null;
   created_at: string;
 }
 

@@ -8,6 +8,7 @@ import {
   type HiringSignalFreshnessBand,
 } from "@fdl/db";
 import { rawPostingSchema } from "@fdl/contracts";
+import { extractJobDetails } from "@fdl/sources";
 import { getDb } from "../db.js";
 
 const log = createLogger("normalize");
@@ -236,6 +237,9 @@ export async function normalizeRawSignal(
     sourcePostingId: posting.sourceJobId,
     postedDate: posting.postedDate,
   });
+
+  // Opening count / shift / posted pay, from the source's untouched posting. Null where it doesn't clearly say (migration 0031).
+  await hiringSignals.setJobDetails(hiringSignal.id, extractJobDetails(rawSignal.source, posting.title, posting.rawPayload));
 
   await postings.add({
     hiringSignalId: hiringSignal.id,

@@ -11,6 +11,13 @@ export interface QueueItem {
   location: string | null;
   contact: { name: string; title: string; phone: string | null; email: string | null };
   freshnessBand: string | null;
+  /** Parsed from the posting (hiring_signals, migration 0031). Each is null when the posting did not clearly say; never a guess. */
+  openingCount: number | null;
+  shift: string | null;
+  /** Posted pay; null when there is no posted range. interval is null when the posting states a range but not hourly vs annual, currency null when it shows only a bare "$". */
+  pay: { min: number; max: number; interval: "hour" | "year" | null; currency: string | null } | null;
+  /** The company's own pay description, verbatim, shown alongside `pay` rather than reconciled with it. Null when the source has none. */
+  payContext: string | null;
   whyNow: string | null;
   // Layer 2 detail. Provenance is deliberately restrained: no vendor names, internal scores or stage detail.
   /** Lets the client mark every lead sharing this contact as flagged after one flag. */
@@ -72,7 +79,7 @@ interface LeadRow {
   opening_script: string | null;
   role_intelligence: unknown;
   objections: unknown;
-  hiring_signal: { role_title: string; location: string | null; freshness_band: string | null; detected_at: string; company: { name: string } };
+  hiring_signal: { role_title: string; location: string | null; freshness_band: string | null; detected_at: string; opening_count: number | null; shift: string | null; pay_min: number | null; pay_max: number | null; pay_interval: "hour" | "year" | null; pay_currency: string | null; pay_context: string | null; company: { name: string } };
   primary_contact: { name: string; title: string; phone: string | null; email: string | null; confidence_score: number; phone_verified: boolean; verified_at: string | null; tier: "function" | "site" | "hr" | null };
 }
 
@@ -100,7 +107,7 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
     .from("leads")
     .select(
       `id, why_now, alternate_contact_ids, primary_contact_id, opening_script, role_intelligence, objections,
-       hiring_signal:hiring_signals ( role_title, location, freshness_band, detected_at, company:companies ( name ) ),
+       hiring_signal:hiring_signals ( role_title, location, freshness_band, detected_at, opening_count, shift, pay_min, pay_max, pay_interval, pay_currency, pay_context, company:companies ( name ) ),
        primary_contact:contacts!primary_contact_id ( name, title, phone, email, confidence_score, phone_verified, verified_at, tier )`,
     )
     .in("id", leadIds);
@@ -172,6 +179,14 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
         roleIntelligence: lead.role_intelligence,
         objections: lead.objections,
         freshnessBand: lead.hiring_signal.freshness_band,
+        openingCount: lead.hiring_signal.opening_count,
+        shift: lead.hiring_signal.shift,
+        // numeric columns come back from PostgREST as numbers, but Number() keeps a string-typed numeric from leaking through
+        pay:
+          lead.hiring_signal.pay_min !== null && lead.hiring_signal.pay_max !== null
+            ? { min: Number(lead.hiring_signal.pay_min), max: Number(lead.hiring_signal.pay_max), interval: lead.hiring_signal.pay_interval, currency: lead.hiring_signal.pay_currency }
+            : null,
+        payContext: lead.hiring_signal.pay_context,
         whyNow: lead.why_now,
         noAnswerAttempts: attempts.get(a.id) ?? 0,
         alternateContacts: lead.alternate_contact_ids.flatMap((id) => contactsById.get(id) ?? []),

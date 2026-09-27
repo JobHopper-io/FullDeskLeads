@@ -113,6 +113,19 @@ export function hiringSignalRepository(db: SupabaseClient) {
       if (error) throw error;
     },
 
+    // Call-sheet facts parsed from the posting (migration 0031). Written every normalize, so a re-fetched posting whose
+    // pay or shift changed is corrected; null clears a field the posting no longer states.
+    setJobDetails: async (
+      id: string,
+      d: { openingCount: number | null; shift: string | null; payMin: number | null; payMax: number | null; payInterval: "hour" | "year" | null; payCurrency: string | null; payContext: string | null },
+    ): Promise<void> => {
+      const { error } = await db
+        .from("hiring_signals")
+        .update({ opening_count: d.openingCount, shift: d.shift, pay_min: d.payMin, pay_max: d.payMax, pay_interval: d.payInterval, pay_currency: d.payCurrency, pay_context: d.payContext })
+        .eq("id", id);
+      if (error) throw error;
+    },
+
     // Day 10 scoring: freshness band (fresh/recent/ageing/stale).
     setFreshnessBand: async (id: string, band: HiringSignalFreshnessBand): Promise<void> => {
       const { error } = await db.from("hiring_signals").update({ freshness_band: band }).eq("id", id);
