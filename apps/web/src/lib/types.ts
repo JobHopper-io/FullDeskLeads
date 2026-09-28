@@ -21,6 +21,8 @@ export interface QueueItem {
   payContext: string | null;
   /** The posting's own description, split at sentences and list items only; null when none is stored. */
   jobDescription: { text: string; item: boolean }[] | null;
+  /** The posting's operating employer (a Crest posting's Lever department, else the company); see apps/api. */
+  employer: string | null;
   whyNow: string | null;
   // Layer 2 detail (see apps/api's QueueItem).
   contactId: string;

@@ -7,7 +7,7 @@ import OutcomePanel from "../components/OutcomePanel";
 import FunctionMatchTag from "../components/FunctionMatchTag";
 import { Generated, Placeholder } from "../components/LeadDetail/LeadDetail";
 import JobDescription from "../components/JobDescription";
-import { archetypeOf, equipmentFor, objectionsFor } from "../lib/intelligence";
+import { equipmentFor, objectionsFor, plantArchetypeOf } from "../lib/intelligence";
 
 // Zero-padded to the width of the total, so it reads "07 of 36" and never shifts as it counts up.
 const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width), "0");
@@ -142,7 +142,7 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
             <ul className="md-chips" aria-label="Typical equipment">
               {equipment.map((e) => <li key={e}>{e}</li>)}
             </ul>
-          ) : archetypeOf(item.company) ? null : (
+          ) : plantArchetypeOf(item) ? null : (
             <Placeholder>No plant archetype on file for this company yet, so no equipment set.</Placeholder>
           )}
           <div className="md-hard">

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { freshnessBand, postingAgeDays } from "@fdl/shared";
-import { LIST_END, postingText } from "@fdl/sources";
+import { LIST_END, operatingEmployer, postingText } from "@fdl/sources";
 import { requireSeat } from "../plugins/auth.plugin.js";
 import { service } from "../serviceDb.js";
 
@@ -25,6 +25,11 @@ export interface QueueItem {
    * list item starts), never otherwise edited. Null when no description was stored.
    */
   jobDescription: { text: string; item: boolean }[] | null;
+  /**
+   * The company the posting is really for (operatingEmployer): a Crest Industries posting's Lever department ("DIS-TRAN
+   * Steel"), otherwise the company itself. Read-only, from the stored payload; picks the plant archetype on My Day.
+   */
+  employer: string | null;
   whyNow: string | null;
   // Layer 2 detail. Provenance is deliberately restrained: no vendor names, internal scores or stage detail.
   /** Lets the client mark every lead sharing this contact as flagged after one flag. */
@@ -220,6 +225,7 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
         jobDescription: lead.hiring_signal.raw_signal?.raw_payload.rawPayload
           ? splitPosting(postingText(lead.hiring_signal.source, lead.hiring_signal.raw_signal.raw_payload.rawPayload, true))
           : null,
+        employer: operatingEmployer(lead.hiring_signal.company.name, lead.hiring_signal.raw_signal?.raw_payload.rawPayload),
         whyNow: lead.why_now,
         noAnswerAttempts: attempts.get(a.id) ?? 0,
         alternateContacts: lead.alternate_contact_ids.flatMap((id) => contactsById.get(id) ?? []),
