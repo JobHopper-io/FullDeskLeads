@@ -37,8 +37,9 @@ async function run(label, patch, vp, section, buttonText) {
     await route.fulfill({ response: res, json: rows });
   });
   await page.goto("http://localhost:5173/");
-  await page.getByRole("button", { name: buttonText }).first().waitFor();
-  await page.getByRole("button", { name: buttonText }).first().click();
+  // My Day's "Show you know the floor" links into Layer 2 at a section.
+  await page.getByRole("link", { name: buttonText }).first().waitFor();
+  await page.getByRole("link", { name: buttonText }).first().click();
   await page.waitForSelector(".l2");
   await page.waitForTimeout(300);
   const r = await page.evaluate((section) => {
@@ -72,7 +73,7 @@ async function run(label, patch, vp, section, buttonText) {
 // 1440x900 is the floor; 1920x1080 checks that it breathes upward.
 for (const vp of [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
   await run("spec-long", LONG, vp, "objections", "Objection handling");
-  await run("real-long", LONG_REAL, vp, "role", "Role detail");
+  await run("real-long", LONG_REAL, vp, "role", "Discovery questions");
 }
 await run("real", null, { width: 1440, height: 900 }, "script", "Full script");
 await browser.close();

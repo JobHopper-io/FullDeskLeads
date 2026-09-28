@@ -39,9 +39,22 @@
   --color-muted: color-mix(in srgb, var(--fdl-charcoal) 60%, var(--fdl-ivory));
   /* Ivory at low opacity over the green sidebar: hover, active item, hairlines. */
   --sidebar-hover: color-mix(in srgb, var(--fdl-ivory) 8%, transparent);
-  --sidebar-active: color-mix(in srgb, var(--fdl-ivory) 14%, transparent);
+  /* Active nav row: the green deepened toward black (the figure's #0E2C24). */
+  --sidebar-deep: color-mix(in srgb, var(--fdl-green) 70%, black);
   --sidebar-line: color-mix(in srgb, var(--fdl-ivory) 22%, transparent);
   /* Overdue and errors only: the one alarm colour. Not a brand colour; the kit has no alert red. */
   --color-danger: #9b1c1c;
   --color-danger-tint: color-mix(in srgb, var(--color-danger) 8%, var(--fdl-ivory));
+  /* NOT brand-kit colours: sampled from the build spec's Figure 8.2 (v1.0, 24 Sep 2026), which the kit doesn't cover.
+     Gold marks "you are here" (active nav bar and badge, question rules); rust marks the one time-sensitive number. */
+  --accent-gold: #E8C87A;
+  --accent-gold-muted: #C7B98F;
+  --accent-rust: #9A4A20;
+  /* Section labels on white: a lighter step of the brand green, as in the figure. */
+  --label-green: #2D6A52;
+  --panel-line: #E4E2DA;
+  --chip-line: #D5D3C9;
+  --inset-bg: #F4F6F3;
+  --chip-bg: #EFEFE7;
+  --tag-bg: #DCE8E1;
 }

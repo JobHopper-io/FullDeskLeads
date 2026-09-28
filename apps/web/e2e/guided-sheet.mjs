@@ -31,15 +31,15 @@ const cardStyle = (i) => page.$eval(`.guided-card:nth-child(${i + 1})`, (e) => {
 });
 
 console.log("1. Entry points");
-// My Day: the lead card carries a "Guided call" button in its top row.
+// My Day: the header carries a "Guided call" link for the lead on screen.
 await page.goto(`${APP}/my-day`, { waitUntil: "networkidle" });
-const cardBtn = page.locator(".lead-card .card-guided");
-check(await cardBtn.isVisible(), `My Day card shows "${await cardBtn.innerText().catch(() => "")}" without opening the lead`);
+const cardBtn = page.locator(".my-day .md-guided");
+check(await cardBtn.isVisible(), `My Day header shows "${await cardBtn.innerText().catch(() => "")}" without opening the lead`);
 await page.screenshot({ path: `${SP}/guided-myday.png` });
 const cardHref = await cardBtn.getAttribute("href");
 await cardBtn.click();
 await page.waitForURL("**/guided");
-check(new URL(page.url()).pathname === cardHref, `card button opens ${cardHref}`);
+check(new URL(page.url()).pathname === cardHref, `Guided link opens ${cardHref}`);
 check(await page.locator(".view-toggle a[aria-current=page]").innerText() === "Guided", "header switch shows Guided as current");
 await page.getByRole("button", { name: "← Back" }).click();
 await page.waitForURL("**/my-day");

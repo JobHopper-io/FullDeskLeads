@@ -14,6 +14,11 @@ export interface QueueItem {
   location: string | null;
   contact: { name: string; title: string; phone: string | null; email: string | null };
   freshnessBand: string | null;
+  /** Parsed from the posting; each null when the posting did not clearly say (see apps/api's QueueItem). */
+  openingCount: number | null;
+  shift: string | null;
+  pay: { min: number; max: number; interval: "hour" | "year" | null; currency: string | null } | null;
+  payContext: string | null;
   whyNow: string | null;
   // Layer 2 detail (see apps/api's QueueItem).
   contactId: string;
@@ -21,6 +26,8 @@ export interface QueueItem {
   /** The primary contact is function-tier (see apps/api's QueueItem); false for site/HR/untiered. */
   functionMatch: boolean;
   signalFirstSeen: string;
+  /** The posting's own date, YYYY-MM-DD; null when the board gave none. */
+  postedDate: string | null;
   contactConfidence: number;
   phoneVerifiedAt: string | null;
   openingScript: string | null;

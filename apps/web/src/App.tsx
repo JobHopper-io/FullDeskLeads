@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router";
 import { AuthProvider, useAuth } from "./lib/auth";
-import { LeadsProvider, isOverdue, useLeads } from "./lib/leads";
+import { LeadsProvider, isActive, isDue, isFollowUpDueToday, isOverdue, useLeads } from "./lib/leads";
 import { supabase } from "./lib/supabaseClient";
+import type { QueueItem } from "./lib/types";
 import LoginPage from "./pages/LoginPage";
 import MyDayPage from "./pages/MyDayPage";
 import NewLeadsPage from "./pages/NewLeadsPage";
@@ -11,18 +12,28 @@ import GuidedSheetPage from "./pages/GuidedSheetPage";
 import FollowUpsPage from "./pages/FollowUpsPage";
 import HistoryPage from "./pages/HistoryPage";
 import OpportunitiesPage from "./pages/OpportunitiesPage";
+import SettingsPage from "./pages/SettingsPage";
+
+const count = (items: QueueItem[] | null, rule: (i: QueueItem) => boolean) => items?.filter(rule).length;
 
 function Nav() {
   const { items } = useLeads();
-  // Overdue is the one number that stays visible on every screen.
-  const overdue = items?.filter(isOverdue).length ?? 0;
+  // No badge until the list has loaded: a 0 before then would be made up.
+  const badge = (n: number | undefined, className = "nav-badge") => n !== undefined && <span className={className}>{n}</span>;
+  const overdue = count(items, isOverdue) ?? 0;
   return (
-    <nav className="app-nav">
-      <NavLink to="/my-day">My Day</NavLink>
-      <NavLink to="/leads" end>New Leads</NavLink>
-      <NavLink to="/follow-ups">Follow-Ups{overdue > 0 && <span className="overdue-badge" title={`${overdue} overdue`}>{overdue}</span>}</NavLink>
-      <NavLink to="/history">History</NavLink>
+    <nav className="app-nav" aria-labelledby="workspace-label">
+      <div id="workspace-label" className="nav-label">Workspace</div>
+      {/* Workable = active and due now (My Day's queue); unworked = active with no outcome ever logged. */}
+      <NavLink to="/my-day">My Day{badge(count(items, (i) => isActive(i) && isDue(i)))}</NavLink>
+      <NavLink to="/leads" end>New Leads{badge(count(items, (i) => isActive(i) && !i.lastEvent))}</NavLink>
+      {/* Due = Follow-Ups' "Due today" count; it turns red while any of them is overdue, the one alarm kept on every screen. */}
+      <NavLink to="/follow-ups" title={overdue ? `${overdue} overdue` : undefined}>
+        Follow-Ups{badge(count(items, isFollowUpDueToday), overdue ? "nav-badge overdue" : "nav-badge")}
+      </NavLink>
       <NavLink to="/opportunities">Opportunities<span className="soon">Soon</span></NavLink>
+      <NavLink to="/history">History</NavLink>
+      <NavLink to="/settings">Settings</NavLink>
     </nav>
   );
 }
@@ -40,12 +51,16 @@ function Loaded({ children }: { children: ReactNode }) {
   );
 }
 
-function Account({ email, role }: { email: string; role?: string }) {
+function Account({ name, email, role }: { name: string; email: string; role?: string }) {
+  const initials = name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
   return (
     <>
-      <span className="account-email" title={email}>{email.split("@")[0]}<wbr />@{email.split("@")[1]}</span>
-      {role && <span className="account-role">{role}</span>}
-      <button className="link-button" onClick={() => supabase.auth.signOut()}>Sign out</button>
+      <span className="account-initials" aria-hidden="true">{initials}</span>
+      <span className="account-who">
+        <span className="account-name" title={email}>{name}</span>
+        {role && <span className="account-role">{role} seat</span>}
+      </span>
+      <button className="account-signout" onClick={() => supabase.auth.signOut()}>Sign out</button>
     </>
   );
 }
@@ -57,13 +72,16 @@ function Shell() {
   if (!session) return <LoginPage />;
 
   const email = session.user.email ?? "";
+  // The profile name when the account has one; otherwise the email's local part, never an invented name.
+  const meta = session.user.user_metadata as { full_name?: string; name?: string };
+  const name = meta.full_name || meta.name || email.split("@")[0];
   return (
     <LeadsProvider key={session.user.id}>
       <div className="app">
         <aside className="sidebar">
           <div className="wordmark"><img src="/brand/logos/fdl-wordmark-white.svg" alt="Full Desk Leads" /></div>
           {seat && <Nav />}
-          <div className="account"><Account email={email} role={seat?.role} /></div>
+          <div className="account"><Account name={name} email={email} role={seat?.role} /></div>
         </aside>
         <main className="main">
           {seat ? (
@@ -75,6 +93,7 @@ function Shell() {
               <Route path="/follow-ups" element={<Loaded><FollowUpsPage /></Loaded>} />
               <Route path="/history" element={<Loaded><HistoryPage /></Loaded>} />
               <Route path="/opportunities" element={<OpportunitiesPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/my-day" replace />} />
             </Routes>
           ) : (

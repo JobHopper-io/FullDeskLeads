@@ -10,8 +10,10 @@ import type { InteractionEvent, QueueItem } from "../lib/types";
 interface Props {
   item: QueueItem;
   onLogged: (event: InteractionEvent) => void;
-  /** My Day says "Save and next": saving there moves straight on to the next lead. */
+  /** My Day says "Save + next lead": saving there moves straight on to the next lead. */
   submitLabel?: string;
+  /** My Day: the save button is always on screen at the panel's bottom right (disabled until the outcome is complete). */
+  pinnedSave?: boolean;
 }
 
 // "default" = the disposition's built-in date (no_answer: next business day); "skip" = no follow-up.
@@ -22,7 +24,7 @@ const INITIAL_CHOICE: Partial<Record<Disposition, Choice>> = { no_answer: "defau
 // The always-visible outcome panel (spec: on desktop every disposition stays on screen, no modal). All the
 // dispositions are one row of options; only what the chosen one needs (follow-up date, reason, alternates) opens
 // inline beneath it. Mount it with key={item.id} so it starts fresh on each lead.
-export default function OutcomePanel({ item, onLogged, submitLabel = "Save outcome" }: Props) {
+export default function OutcomePanel({ item, onLogged, submitLabel = "Save outcome", pinnedSave = false }: Props) {
   const [disposition, setDisposition] = useState<Disposition | null>(null);
   const [choice, setChoice] = useState<Choice>(null);
   const [custom, setCustom] = useState("");
@@ -87,8 +89,10 @@ export default function OutcomePanel({ item, onLogged, submitLabel = "Save outco
     }
   }
 
+  const save = <button className="outcome-button" onClick={submit} disabled={!valid || busy}>{busy ? "Saving…" : submitLabel}</button>;
+
   return (
-    <section className="outcome-panel" aria-label={`Log the result for ${item.company}`}>
+    <section className={pinnedSave ? "outcome-panel pinned" : "outcome-panel"} aria-label={`Log the result for ${item.company}`}>
       <div className="eyebrow">Log the result</div>
       <div className="disposition-grid" role="radiogroup" aria-label="Outcome">
         {DISPOSITIONS.map((d) => (
@@ -170,11 +174,12 @@ export default function OutcomePanel({ item, onLogged, submitLabel = "Save outco
                 onChange={(e) => setNote(e.target.value)}
               />
             </label>
-            <button className="outcome-button" onClick={submit} disabled={!valid || busy}>{busy ? "Saving…" : submitLabel}</button>
+            {!pinnedSave && save}
           </div>
           {error && <span className="error">{error}</span>}
         </div>
       )}
+      {pinnedSave && <div className="outcome-footer">{save}</div>}
     </section>
   );
 }
