@@ -47,13 +47,28 @@ const htmlToText = (s: string, listItems = false) => {
 };
 
 interface LeverRaw {
+  createdAt?: number;
   descriptionPlain?: string; openingPlain?: string; additionalPlain?: string; salaryDescriptionPlain?: string;
   lists?: { text?: string; content?: string }[];
   salaryRange?: { min?: unknown; max?: unknown; currency?: unknown; interval?: unknown } | null;
 }
 interface GreenhouseRaw {
+  first_published?: string | null;
   content?: string;
   metadata?: { value_type?: string; value?: unknown }[] | null;
+}
+
+/**
+ * When the source says the posting was first published, from the untouched payload: Greenhouse's first_published (never
+ * its updated_at, which moves on every edit), Lever's createdAt (Lever exposes no separate publish date). Null if absent.
+ */
+export function firstPublishedDate(source: string, raw: unknown): string | null {
+  if (source === "greenhouse") return (raw as GreenhouseRaw).first_published ?? null;
+  if (source === "lever") {
+    const at = (raw as LeverRaw).createdAt;
+    return typeof at === "number" ? new Date(at).toISOString() : null;
+  }
+  return null;
 }
 
 /**

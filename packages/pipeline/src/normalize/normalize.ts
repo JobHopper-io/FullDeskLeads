@@ -5,7 +5,6 @@ import {
   companyRepository,
   hiringSignalRepository,
   hiringSignalPostingRepository,
-  type HiringSignalFreshnessBand,
 } from "@fdl/db";
 import { rawPostingSchema } from "@fdl/contracts";
 import { extractJobDetails } from "@fdl/sources";
@@ -59,19 +58,11 @@ function normalizeLocationForComparison(location: string | null): string | null 
   return normalized.length > 0 ? normalized : null;
 }
 
-/** fresh: 0-2 days, recent: 3-7, ageing: 8-14, stale: 15+ — from postedDate if present, else detectedAt. */
-function computeFreshnessBand(referenceDate: Date, now: Date): HiringSignalFreshnessBand {
-  const ageDays = Math.max(0, (now.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
-  if (ageDays <= 2) return "fresh";
-  if (ageDays <= 7) return "recent";
-  if (ageDays <= 14) return "ageing";
-  return "stale";
-}
-
 /**
  * Resolves a raw_signal into a hiring_signal: figures out which company it belongs to
  * (creating one if this is the first time we've seen it), checks whether it's a duplicate of
- * something we already have, and if not, writes the new hiring_signal with its freshness band.
+ * something we already have, and if not, writes the new hiring_signal. (Its freshness band is not stored: it is computed
+ * from the posting's age wherever it's read, see @fdl/shared freshnessBand.)
  *
  * Company resolution: domain-first. If the source_companies row carries a domain, that's
  * authoritative — match (or create) companies by domain and never fall through to name
@@ -248,14 +239,10 @@ export async function normalizeRawSignal(
     sourcePostingId: posting.sourceJobId,
   });
 
-  const referenceDate = posting.postedDate ? new Date(posting.postedDate) : new Date(hiringSignal.detected_at);
-  const freshnessBand = computeFreshnessBand(referenceDate, new Date());
-  await hiringSignals.setFreshnessBand(hiringSignal.id, freshnessBand);
-
   await rawSignals.markProcessed(rawSignalId);
 
   log.info(
-    { rawSignalId, companyId, hiringSignalId: hiringSignal.id, wasNewCompany, freshnessBand },
+    { rawSignalId, companyId, hiringSignalId: hiringSignal.id, wasNewCompany },
     "normalized raw signal into hiring_signal",
   );
 

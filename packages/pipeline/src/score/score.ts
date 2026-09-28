@@ -1,4 +1,4 @@
-import { createLogger } from "@fdl/shared";
+import { createLogger, freshnessBand, postingAgeDays } from "@fdl/shared";
 import {
   companyRepository,
   configurationRepository,
@@ -87,7 +87,8 @@ export async function scoreHiringSignal(
   }
 
   const { fitScore, geographyMatch } = computeFitScore(hiringSignal.location, configuration.target_geographies);
-  const freshnessScore = hiringSignal.freshness_band ? FRESHNESS_SCORES[hiringSignal.freshness_band] : null;
+  // The band as of now, from the posting's age (never the stored column, which is no longer written).
+  const freshnessScore = FRESHNESS_SCORES[freshnessBand(postingAgeDays(hiringSignal.posted_date ?? hiringSignal.detected_at))];
   const confidenceScore = contact.confidence_score;
 
   const scoreRecord = await scoreRecords.upsertForHiringSignal({

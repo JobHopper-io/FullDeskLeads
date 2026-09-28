@@ -1,6 +1,8 @@
 // Run: npx tsx --env-file=.env scripts/check-lead-sweep.ts — the lead sweep's behaviour on TEMPORARY rows (deleted after),
 // against the real DB and the real board APIs. It runs the real sweep, so it also re-checks every real workable lead
 // (idempotent: anything already expired is not workable, and live leads are untouched).
+// CAUTION: that includes every current filter rule, posting age (MAX_POSTING_AGE_DAYS) among them: running this applies
+// them to real leads. Use scripts/run-lead-sweep.ts --plan to see what would change first.
 import assert from "node:assert/strict";
 import { createServiceClient, hiringSignalPostingRepository, tenantRepository } from "@fdl/db";
 import { loadEnv } from "@fdl/shared";

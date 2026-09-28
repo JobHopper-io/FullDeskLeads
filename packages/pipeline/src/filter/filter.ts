@@ -1,5 +1,6 @@
-import { createLogger } from "@fdl/shared";
-import { companyRepository, hiringSignalRepository } from "@fdl/db";
+import { createLogger, postingAgeDays } from "@fdl/shared";
+import { companyRepository, hiringSignalRepository, rawSignalRepository } from "@fdl/db";
+import { firstPublishedDate } from "@fdl/sources";
 import { getDb } from "../db.js";
 
 const log = createLogger("filter");
@@ -70,9 +71,24 @@ export function matchStaffingFirmName(companyName: string): string | null {
   return companyName.match(STAFFING_NAME_PATTERN)?.[0].toLowerCase() ?? null;
 }
 
+/** A posting first published more than this many days ago is stale: not a lead, and an emitted lead on it expires. */
+export const MAX_POSTING_AGE_DAYS = 14;
+
 /**
- * Read-only: the reason a signal should be excluded under the filter rules right now (role-title patterns, then the
- * staffing-firm company name), or null. The single decision point shared by the filter stage and the lead sweep.
+ * Read-only: the stale-posting reason, or null. Age is from the source's first-published date, else from when the
+ * signal was first detected. With neither, the signal is kept (null) and the caller logs it.
+ */
+export function stalePostingReason(firstPublished: string | null, detectedAt: string | null, now: Date = new Date()): string | null {
+  const reference = firstPublished ?? detectedAt;
+  if (!reference) return null;
+  const age = postingAgeDays(reference, now);
+  return age > MAX_POSTING_AGE_DAYS ? `stale-posting: ${age} days old, limit ${MAX_POSTING_AGE_DAYS}` : null;
+}
+
+/**
+ * Read-only: the reason a signal should be excluded under the filter rules right now (role-title patterns, the
+ * staffing-firm company name, then posting age), or null. The single decision point shared by the filter stage and the
+ * lead sweep.
  */
 export async function filterReasonFor(hiringSignalId: string): Promise<string | null> {
   const db = getDb();
@@ -84,7 +100,18 @@ export async function filterReasonFor(hiringSignalId: string): Promise<string | 
 
   const company = await companyRepository(db).findById(hiringSignal.company_id);
   const staffingWord = company ? matchStaffingFirmName(company.name) : null;
-  return staffingWord ? `staffing-firm: company name "${company?.name}" matches "${staffingWord}"` : null;
+  if (staffingWord) return `staffing-firm: company name "${company?.name}" matches "${staffingWord}"`;
+
+  // The first-published date comes from the source's own payload, not the stored posted_date: for Greenhouse that
+  // column falls back to updated_at when first_published is missing, and an edit must not make a posting look new.
+  const raw = hiringSignal.raw_signal_id ? await rawSignalRepository(db).findById(hiringSignal.raw_signal_id) : null;
+  const rawPosting = raw?.raw_payload as { rawPayload?: unknown } | undefined;
+  const firstPublished = rawPosting?.rawPayload ? firstPublishedDate(hiringSignal.source, rawPosting.rawPayload) : null;
+  if (!firstPublished && !hiringSignal.detected_at) {
+    log.warn({ hiringSignalId }, "no first-published date and no detected_at: posting age unknown, signal kept");
+    return null;
+  }
+  return stalePostingReason(firstPublished, hiringSignal.detected_at);
 }
 
 export async function filterHiringSignal(hiringSignalId: string): Promise<{
@@ -95,6 +122,6 @@ export async function filterHiringSignal(hiringSignalId: string): Promise<{
   if (!reason) return { excluded: false, reason: null };
 
   await hiringSignalRepository(getDb()).setStatus(hiringSignalId, "excluded", reason);
-  log.info({ hiringSignalId, reason }, "excluded hiring_signal — not a real external opening for this product");
+  log.info({ hiringSignalId, reason }, "excluded hiring_signal: not a lead for this product (see reason)");
   return { excluded: true, reason };
 }

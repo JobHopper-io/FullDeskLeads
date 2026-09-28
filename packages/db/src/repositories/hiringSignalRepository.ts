@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { HiringSignalFreshnessBand, HiringSignalRow, HiringSignalStatus } from "../types.js";
+import type { HiringSignalRow, HiringSignalStatus } from "../types.js";
 
 export function hiringSignalRepository(db: SupabaseClient) {
   return {
@@ -129,12 +129,6 @@ export function hiringSignalRepository(db: SupabaseClient) {
         .from("hiring_signals")
         .update({ opening_count: d.openingCount, shift: d.shift, pay_min: d.payMin, pay_max: d.payMax, pay_interval: d.payInterval, pay_currency: d.payCurrency, pay_context: d.payContext })
         .eq("id", id);
-      if (error) throw error;
-    },
-
-    // Day 10 scoring: freshness band (fresh/recent/ageing/stale).
-    setFreshnessBand: async (id: string, band: HiringSignalFreshnessBand): Promise<void> => {
-      const { error } = await db.from("hiring_signals").update({ freshness_band: band }).eq("id", id);
       if (error) throw error;
     },
   };
