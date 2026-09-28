@@ -19,6 +19,8 @@ export interface QueueItem {
   shift: string | null;
   pay: { min: number; max: number; interval: "hour" | "year" | null; currency: string | null } | null;
   payContext: string | null;
+  /** The posting's own description, split at sentences and list items only; null when none is stored. */
+  jobDescription: { text: string; item: boolean }[] | null;
   whyNow: string | null;
   // Layer 2 detail (see apps/api's QueueItem).
   contactId: string;

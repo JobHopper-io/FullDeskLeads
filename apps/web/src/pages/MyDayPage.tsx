@@ -6,10 +6,8 @@ import type { QueueItem } from "../lib/types";
 import OutcomePanel from "../components/OutcomePanel";
 import FunctionMatchTag from "../components/FunctionMatchTag";
 import { Generated, Placeholder } from "../components/LeadDetail/LeadDetail";
-// The plant archetype library and the spec's fixed objection set (pure data files, no deps), so My Day shows exactly
-// what generation would be given, never a second copy of it.
-import { ARCHETYPES, COMPANY_SOURCES } from "../../../../packages/pipeline/src/intelligence/sources";
-import { SPEC_SET, fixedObjections } from "../../../../packages/pipeline/src/intelligence/objections";
+import JobDescription from "../components/JobDescription";
+import { archetypeOf, equipmentFor, objectionsFor } from "../lib/intelligence";
 
 // Zero-padded to the width of the total, so it reads "07 of 36" and never shifts as it counts up.
 const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width), "0");
@@ -27,15 +25,6 @@ function money(n: number, currency: string | null) {
   return !currency || currency === "USD" ? `$${amount}` : `${currency} ${amount}`;
 }
 const PER = { hour: "/hr", year: "/yr" } as const;
-
-/** The archetype only when this lead's company is one the library has verified; nothing is guessed from a name. */
-const archetypeOf = (company: string) => Object.values(COMPANY_SOURCES).find((c) => c.company === company)?.archetype ?? null;
-
-/** Leads without an archetype get only the pairs that have no {industry}/{applicants} slot to fill. */
-function objectionsFor(item: QueueItem) {
-  const archetype = archetypeOf(item.company);
-  return archetype ? fixedObjections(archetype, item.roleTitle) : SPEC_SET.filter((o) => !/\{\w+\}/.test(o.response));
-}
 
 /** role_intelligence as generation writes it ({ questions: [...] }); anything else is shown raw. */
 const questionsOf = (v: unknown) => {
@@ -110,7 +99,7 @@ export default function MyDayPage() {
 
 function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeof OutcomePanel>[0]["onLogged"] }) {
   const { phone, name, title } = item.contact;
-  const archetype = archetypeOf(item.company);
+  const equipment = equipmentFor(item);
   const days = item.postedDate ? daysSince(item.postedDate) : null;
   const seats = [item.openingCount !== null && plural(item.openingCount, "seat"), item.shift].filter(Boolean).join(", ");
   const questions = questionsOf(item.roleIntelligence);
@@ -149,11 +138,11 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
 
         <Panel className="md-plant" label="The plant" aside={<span className="md-label-aside">What you know before he says a word</span>}>
           <Placeholder>Plant descriptor isn't generated yet.</Placeholder>
-          {archetype ? (
+          {equipment ? (
             <ul className="md-chips" aria-label="Typical equipment">
-              {ARCHETYPES[archetype].equipment.map((e) => <li key={e}>{e}</li>)}
+              {equipment.map((e) => <li key={e}>{e}</li>)}
             </ul>
-          ) : (
+          ) : archetypeOf(item.company) ? null : (
             <Placeholder>No plant archetype on file for this company yet, so no equipment set.</Placeholder>
           )}
           <div className="md-hard">
@@ -178,7 +167,7 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
             <Link className="md-button" to={detail("role")}>Discovery questions</Link>
             <Link className="md-button" to={detail("script")}>Full script</Link>
             <Link className="md-button" to={detail("objections")}>Objection handling</Link>
-            <button className="md-button" disabled title="The job description view isn't built yet">Job description</button>
+            <JobDescription item={item} className="md-button" />
           </div>
         </Panel>
 
@@ -189,7 +178,7 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
 
       <div className="md-col">
         <div className="md-stats">
-          <Stat accent value={days !== null ? plural(days, "day") : null} label={`posting live · ${SIGNAL_TYPE}`} />
+          <Stat accent value={days !== null ? (days === 0 ? "Posted today" : `Posted ${plural(days, "day")} ago`) : null} label={SIGNAL_TYPE} />
           <Stat value={item.openingCount !== null ? String(item.openingCount) : null} label={item.shift ? `openings · ${item.shift}` : "openings"} />
           <Stat
             value={item.pay ? money(item.pay.min, item.pay.currency) : null}

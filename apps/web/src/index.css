@@ -139,7 +139,7 @@ strong, b, th { font-weight: 500; }
 .md-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .md-stat { background: var(--fdl-white); border: 1px solid var(--panel-line); border-radius: var(--fdl-radius); padding: 8px 12px 10px; min-width: 0; }
 .md-stat-value { font-family: var(--fdl-font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.2; color: var(--fdl-green); font-variant-numeric: lining-nums; overflow-wrap: anywhere; }
-.md-stat.accent .md-stat-value { color: var(--accent-rust); }
+.md-stat.accent .md-stat-value { color: var(--accent-rust); font-size: 1.0625rem; line-height: 1.45; }
 .md-stat .md-dash { color: var(--fdl-silver); font-weight: 500; }
 .md-stat-label { font-size: 0.625rem; color: var(--color-muted); overflow-wrap: anywhere; }
 .md-gap .md-label { color: var(--accent-rust); }
@@ -318,6 +318,28 @@ strong, b, th { font-weight: 500; }
 .guided-answer:focus-visible { box-shadow: 0 0 0 2px var(--fdl-green); border-radius: var(--fdl-radius); }
 .guided-more { margin-top: 14px; }
 .guided-outcome { margin-top: 20px; scroll-margin-top: var(--l2-top, 160px); }
+
+/* Job description: the posting's own text in a native dialog, one line per sentence, list items bulleted. */
+.l2-top-actions { display: flex; align-items: center; gap: 12px; }
+.l2-jd-button { background: var(--fdl-white); border: 1px solid var(--fdl-green); color: var(--fdl-green); border-radius: var(--fdl-radius); padding: 5px 14px; font-size: 0.8125rem; font-weight: 500; }
+.l2-jd-button:disabled { border-color: var(--fdl-hairline); color: var(--color-muted); cursor: not-allowed; }
+.jd { margin: auto; width: min(720px, calc(100vw - 32px)); max-height: min(80vh, 760px); padding: 0; border: 1px solid var(--panel-line); border-radius: var(--fdl-radius-lg); color: var(--fdl-charcoal); background: var(--fdl-white); }
+.jd::backdrop { background: color-mix(in srgb, var(--fdl-charcoal) 40%, transparent); }
+.jd[open] { display: flex; flex-direction: column; }
+.jd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 18px 22px 14px; border-bottom: 1px solid var(--panel-line); }
+.jd-head h2 { font-size: 1.25rem; line-height: 1.2; overflow-wrap: anywhere; }
+.jd-head p { margin: 4px 0 0; font-size: 0.75rem; color: var(--color-muted); }
+.jd-head .link-button { color: var(--fdl-green); flex: none; }
+.jd-body { overflow-y: auto; padding: 16px 22px 22px; display: grid; gap: 6px; font-size: 0.875rem; line-height: 1.55; }
+.jd-body p { margin: 0; overflow-wrap: anywhere; }
+.jd-body .jd-item { padding-left: 16px; position: relative; }
+.jd-body .jd-item::before { content: "•"; position: absolute; left: 2px; color: var(--label-green); }
+
+/* Guided: a fixed response, and "Who is this?" under the Open step. */
+.guided-response { margin: 0; font-size: 0.875rem; line-height: 1.5; }
+.guided-who { margin-top: 12px; display: grid; gap: 6px; }
+.l2 .guided-who h4 { margin: 0; }
+.guided-card[data-state="live"] .guided-who .eyebrow { color: color-mix(in srgb, var(--fdl-ivory) 80%, transparent); }
 
 /* Intelligence | Guided: two views of one lead, in both lead pages' headers. */
 .view-toggle { display: inline-flex; border: 1px solid var(--fdl-green); border-radius: var(--fdl-radius); overflow: hidden; }

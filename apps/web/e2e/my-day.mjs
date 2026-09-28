@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 const kv = (f) => Object.fromEntries(readFileSync(f, "utf8").split("\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).trim()]));
 const env = kv("../../.env");
 const SP = process.argv[2] ?? tmpdir();
-const APP = "http://localhost:5173";
+const APP = process.env.APP ?? "http://localhost:5173";
 const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
 let failures = 0;
@@ -72,6 +72,8 @@ check(eq(labels, [...leftOrder, ...rightOrder]), `section labels: ${labels.join(
 const top = queue[0];
 const tiles = await page.$$eval(".md-stat", (ts) => ts.map((t) => [t.querySelector(".md-stat-value").textContent, t.querySelector(".md-stat-label").textContent]));
 console.log(`   tiles: ${JSON.stringify(tiles)}`);
+const days = top.postedDate ? Math.round((startOfToday - new Date(...top.postedDate.split("-").map((n, i) => Number(n) - (i === 1 ? 1 : 0)))) / 864e5) : null;
+check(tiles[0][0] === (days === null ? "—" : days === 0 ? "Posted today" : `Posted ${days} day${days === 1 ? "" : "s"} ago`) && tiles[0][1] === "Public job posting", `days tile: ${tiles[0].join(" / ")}`);
 check(tiles[1][0] === (top.openingCount === null ? "—" : String(top.openingCount)), "openings tile: real count or a dash");
 check(tiles[2][0] === (top.pay ? tiles[2][0] : "—") && (top.pay ? tiles[2][0].startsWith("$") || /^[A-Z]{3} /.test(tiles[2][0]) : true), "pay tile: posted floor or a dash");
 check(tiles[3][0] === String(1 + top.alternateContacts.length), "contacts on file = primary + alternates");
@@ -89,7 +91,16 @@ for (const [name, section] of [["Discovery questions", "role"], ["Full script", 
   await page.goBack();
   await page.waitForURL("**/my-day");
 }
-check(await page.getByRole("button", { name: "Job description" }).isDisabled(), "Job description disabled (not built yet)");
+const jd = page.getByRole("button", { name: "Job description" });
+check(await jd.isDisabled() === !top.jobDescription, `Job description ${top.jobDescription ? "enabled" : "disabled"} (${top.jobDescription?.length ?? 0} lines stored)`);
+if (top.jobDescription) {
+  await jd.click();
+  const shown = await page.$$eval("dialog.jd[open] .jd-body p", (ps) => ps.map((p) => p.textContent));
+  check(eq(shown, top.jobDescription.map((l) => l.text)), `dialog shows the stored lines verbatim, in order (${shown.length})`);
+  await page.screenshot({ path: `${SP}/my-day-jd.png` });
+  await page.getByRole("button", { name: "Close" }).click();
+  check(!(await page.locator("dialog.jd[open]").count()), "Close shuts the dialog");
+}
 
 console.log("4. A lead with a plant archetype and alternates (browser-only reorder)");
 const pickIdx = items.findIndex((i) => active(i) && due(i) && i.company === "Industrial Electric Manufacturing" && i.alternateContacts.length);
@@ -104,12 +115,25 @@ await page.goto(`${APP}/my-day`, { waitUntil: "networkidle" });
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${SP}/my-day-archetype.png` });
 check((await page.locator(".md-company").innerText()) === pick.company, `showing ${pick.company} · ${pick.roleTitle}`);
-check((await page.locator(".md-chips li").count()) === 6, "switchgear equipment chips from the archetype library");
+const plantFloor = /field service|test supervisor|quality control|production (controller|planner)|materials supervisor|site supervisor|manufacturing engineer|maintenance|technician|welder|machinist|fitter|operator/i.test(pick.roleTitle);
+check((await page.locator(".md-chips li").count()) === (plantFloor ? 6 : 0), `equipment chips ${plantFloor ? "shown" : "hidden"} for ${pick.roleTitle}`);
 check((await page.locator(".md-objections dt").count()) === 4, "all four objections for an archetype lead");
 const others = await page.locator(".md-objections dd").allInnerTexts();
 check(others[1].includes("switchgear people"), `industry slot filled: ${others[1]}`);
 const alts = await page.locator(".md-alternates li").allInnerTexts();
 check(alts.length === pick.alternateContacts.length, `alternates: ${alts.length ? alts.map((a) => a.replace(/\n/g, " ")).join(" | ") : "(none on this lead)"}`);
+await page.unroute("**/api/leads");
+
+const floor = items.find((i) => active(i) && due(i) && i.company === "Industrial Electric Manufacturing" && /field service|technician/i.test(i.roleTitle));
+await page.route("**/api/leads", async (route) => {
+  const res = await route.fetch(); const body = await res.json();
+  const i = body.findIndex((x) => x.id === floor.id); body.unshift(...body.splice(i, 1));
+  await route.fulfill({ response: res, json: body });
+});
+await page.goto(`${APP}/my-day`, { waitUntil: "networkidle" });
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${SP}/my-day-plant-floor.png` });
+check((await page.locator(".md-chips li").count()) === 6, `equipment chips shown for plant-floor role ${floor.roleTitle}`);
 await page.unroute("**/api/leads");
 
 console.log("5. Save + next lead logs a real outcome and moves on (restored after)");

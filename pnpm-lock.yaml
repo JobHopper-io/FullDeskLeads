@@ -39,6 +39,9 @@ importers:
       '@fdl/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@fdl/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
       fastify:
         specifier: ^5.12.4
         version: 5.12.4

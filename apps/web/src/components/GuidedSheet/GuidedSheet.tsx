@@ -1,8 +1,9 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type Ref } from "react";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import ViewToggle from "../ViewToggle";
 import { Generated, Placeholder } from "../LeadDetail/LeadDetail";
+import { objectionsFor } from "../../lib/intelligence";
 
 interface Props {
   item: QueueItem;
@@ -37,11 +38,17 @@ const STEPS: { label: string; cue: string; words: (item: QueueItem) => ReactNode
   },
 ];
 
-// The two interruptions the spec handles explicitly. Real objections join them once generation fills `objections`.
-const INTERRUPTIONS = [
-  { key: "busy", label: "“I'm busy”" },
-  { key: "who", label: "“Who is this?”" },
+interface Tap { key: string; label: string; answer: ReactNode }
+
+// Right rail (spec Figure 9.2): the fixed objection set from objections.ts, then "I'm busy", which has no reviewed
+// response yet. "Email me something." stays on the Intelligence view only. "Who is this?" sits under the Open step.
+const pushbacksFor = (item: QueueItem): Tap[] => [
+  ...objectionsFor(item)
+    .filter((o) => o.objection !== "Email me something.")
+    .map((o, i) => ({ key: `o${i}`, label: `“${o.objection}”`, answer: <p className="guided-response">“{o.response}”</p> })),
+  { key: "busy", label: "“I'm busy.”", answer: <Placeholder>The response to “I'm busy” isn't generated yet.</Placeholder> },
 ];
+const WHO: Tap = { key: "who", label: "“Who is this?”", answer: <Placeholder>The response to “Who is this?” isn't generated yet.</Placeholder> };
 
 const stateOf = (index: number, live: number): StepState => (index < live ? "done" : index === live ? "live" : "later");
 
@@ -55,6 +62,7 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
   const firstObjection = useRef<HTMLButtonElement>(null);
   const outcomeRef = useRef<HTMLDivElement>(null);
   const { phone, name, title } = item.contact;
+  const pushbacks = pushbacksFor(item);
 
   const goTo = (index: number) => {
     setLive(index);
@@ -69,6 +77,19 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
       answer?.focus();
     });
   };
+  // One tappable interruption: its words open beneath it and take focus.
+  const tap = (o: Tap, ref?: Ref<HTMLButtonElement>) => (
+    <div key={o.key}>
+      <button ref={ref} className="guided-objection" aria-expanded={openAnswer === o.key} aria-controls={`answer-${o.key}`} onClick={() => jumpTo(o.key)}>
+        {o.label}
+      </button>
+      {openAnswer === o.key && (
+        <div id={`answer-${o.key}`} className="guided-answer" tabIndex={-1} ref={(el) => { answerRefs.current[o.key] = el; }}>
+          {o.answer}
+        </div>
+      )}
+    </div>
+  );
   const logResult = () => {
     outcomeRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     outcomeRef.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
@@ -133,6 +154,7 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
                   {state === "live" && <span className="guided-count">Step {i + 1} of {STEPS.length}</span>}
                 </h3>
                 {step.words(item)}
+                {i === 0 && <div className="guided-who"><h4 className="eyebrow">If they ask</h4>{tap(WHO)}</div>}
                 {state === "live" && (
                   <div className="guided-actions">
                     {i < STEPS.length - 1 ? (
@@ -153,24 +175,7 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
           <section>
             <h3 className="eyebrow">If they push back — tap to jump</h3>
             <div className="guided-objections">
-              {INTERRUPTIONS.map((o, idx) => (
-                <div key={o.key}>
-                  <button
-                    ref={idx === 0 ? firstObjection : undefined}
-                    className="guided-objection"
-                    aria-expanded={openAnswer === o.key}
-                    aria-controls={`answer-${o.key}`}
-                    onClick={() => jumpTo(o.key)}
-                  >
-                    {o.label}
-                  </button>
-                  {openAnswer === o.key && (
-                    <div id={`answer-${o.key}`} className="guided-answer" tabIndex={-1} ref={(el) => { answerRefs.current[o.key] = el; }}>
-                      <Placeholder>{`The response to ${o.label} isn't generated yet.`}</Placeholder>
-                    </div>
-                  )}
-                </div>
-              ))}
+              {pushbacks.map((o, idx) => tap(o, idx === 0 ? firstObjection : undefined))}
             </div>
             {item.objections != null && (
               <div className="guided-more">

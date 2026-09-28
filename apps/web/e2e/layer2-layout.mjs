@@ -36,7 +36,7 @@ async function run(label, patch, vp, section, buttonText) {
     if (patch) for (const r of rows) Object.assign(r, { company: patch.company, roleTitle: patch.roleTitle, contact: { ...r.contact, name: patch.contactName, title: patch.contactTitle } });
     await route.fulfill({ response: res, json: rows });
   });
-  await page.goto("http://localhost:5173/");
+  await page.goto(`${process.env.APP ?? "http://localhost:5173"}/`);
   // My Day's "Show you know the floor" links into Layer 2 at a section.
   await page.getByRole("link", { name: buttonText }).first().waitFor();
   await page.getByRole("link", { name: buttonText }).first().click();

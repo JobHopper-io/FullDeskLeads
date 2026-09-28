@@ -11,7 +11,7 @@ const kv = (f) => Object.fromEntries(readFileSync(f, "utf8").split("\n").filter(
 const env = kv("../../.env");
 const A = process.argv[2];
 const SP = process.argv[3] ?? tmpdir();
-const APP = "http://localhost:5173";
+const APP = process.env.APP ?? "http://localhost:5173";
 if (!A) throw new Error("usage: node e2e/guided-sheet.mjs <leadAssignmentId> [screenshotDir]");
 const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
@@ -87,14 +87,22 @@ await page.locator(".guided-step-btn", { hasText: "Show your work" }).click();
 check((await states(".guided-card")).join("/") === "done/live/later/later", "clicking a rail stage jumps straight to it");
 
 console.log("3. Objection taps");
+const rail = await page.$$eval(".guided-right .guided-objection", (bs) => bs.map((b) => b.textContent));
+check(["“We don't use agencies.”", "“Too expensive.”", "“I'm busy.”"].every((o) => rail.includes(o)) && !rail.includes("“Email me something.”") && !rail.includes("“Who is this?”"), `right rail: ${rail.join(" | ")}`);
+check(await page.locator(".guided-card").first().getByRole("button", { name: "“Who is this?”" }).isVisible(), "\"Who is this?\" sits under the Open step");
 await page.getByRole("button", { name: "They pushed back" }).click();
-check(await page.evaluate(() => document.activeElement?.textContent) === "“I'm busy”", "\"They pushed back\" moves focus to the first objection");
-await page.getByRole("button", { name: "“I'm busy”" }).click();
+check(await page.evaluate(() => document.activeElement?.textContent) === rail[0], "\"They pushed back\" moves focus to the first objection");
+await page.getByRole("button", { name: "“We don't use agencies.”" }).click();
+await page.waitForTimeout(300);
+const agencies = page.locator("#answer-o0");
+check(await agencies.isVisible() && (await agencies.innerText()).startsWith("“Fair enough"), `"We don't use agencies." opens its response: ${JSON.stringify(await agencies.innerText())}`);
+check(await page.evaluate(() => document.activeElement?.id) === "answer-o0", "focus jumps to that response");
+check((await states(".guided-card")).join("/") === "done/live/later/later", "a tap doesn't lose the caller's place in the steps");
+await page.getByRole("button", { name: "“I'm busy.”" }).click();
 await page.waitForTimeout(300);
 const busy = page.locator("#answer-busy");
-check(await busy.isVisible() && (await busy.innerText()).includes("I'm busy"), `"I'm busy" opens its words: ${JSON.stringify(await busy.innerText())}`);
-check(await page.evaluate(() => document.activeElement?.id) === "answer-busy", "focus jumps to the \"I'm busy\" words");
-check((await states(".guided-card")).join("/") === "done/live/later/later", "a tap doesn't lose the caller's place in the steps");
+check(await busy.isVisible() && !(await agencies.isVisible()), `"I'm busy." opens its own words and closes the other: ${JSON.stringify(await busy.innerText())}`);
+await page.screenshot({ path: `${SP}/guided-rail.png` });
 await page.getByRole("button", { name: "“Who is this?”" }).click();
 await page.waitForTimeout(300);
 check(await page.locator("#answer-who").isVisible() && !(await busy.isVisible()), "\"Who is this?\" opens its own words and closes the other");

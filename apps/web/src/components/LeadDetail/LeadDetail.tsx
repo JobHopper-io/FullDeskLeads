@@ -6,6 +6,7 @@ import OutcomePanel from "../OutcomePanel";
 import StateTag from "../StateTag";
 import FunctionMatchTag from "../FunctionMatchTag";
 import ViewToggle from "../ViewToggle";
+import JobDescription from "../JobDescription";
 
 export type DetailSection = "script" | "role" | "objections";
 
@@ -64,7 +65,10 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
       <div className="l2-top" ref={topRef}>
         <div className="l2-top-row">
           <button className="link-button" onClick={onBack}>← Back</button>
-          <ViewToggle id={item.id} current="intelligence" />
+          <div className="l2-top-actions">
+            <JobDescription item={item} className="l2-jd-button" />
+            <ViewToggle id={item.id} current="intelligence" />
+          </div>
         </div>
         <h2 className="l2-company">{item.company}</h2>
         <div className="l2-role">
