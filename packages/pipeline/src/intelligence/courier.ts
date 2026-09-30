@@ -31,7 +31,7 @@ async function once(prompt: { system: string; user: string }, apiKey: string, fe
   return { ok: true, text, model: body.model ?? "unknown", attempts: 1 };
 }
 
-/** One generation, retried once on any failure (network, timeout, non-200, incomplete). Never throws. */
+/** One generation, retried once on any failure (network, timeout, non-200, incomplete) except a 429. Never throws. */
 export async function callCourier(prompt: { system: string; user: string }, fetchFn: typeof fetch = fetch): Promise<CourierResult> {
   const apiKey = process.env.GEMMA_API_KEY;
   if (!apiKey) return { ok: false, error: "GEMMA_API_KEY is not set", attempts: 0 };
@@ -43,7 +43,8 @@ export async function callCourier(prompt: { system: string; user: string }, fetc
       last = { ok: false, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error), attempts: 1 };
     }
     last.attempts = attempt;
-    if (last.ok) return last;
+    // A 429 is Courier's credit limit for the period: an immediate retry only spends another call.
+    if (last.ok || last.error.startsWith("HTTP 429")) return last;
   }
   return last;
 }
