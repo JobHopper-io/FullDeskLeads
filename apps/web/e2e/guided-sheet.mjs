@@ -26,7 +26,7 @@ page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 
 const states = async (sel) => page.$$eval(sel, (els) => els.map((e) => e.getAttribute("data-state")));
 const cardStyle = (i) => page.$eval(`.guided-card:nth-child(${i + 1})`, (e) => {
-  const s = getComputedStyle(e); const w = e.querySelector(".l2-placeholder, .guided-words, .l2-raw");
+  const s = getComputedStyle(e); const w = e.querySelector(".l2-placeholder, .guided-words, .l2-questions");
   return { bg: s.backgroundColor, opacity: s.opacity, words: w ? getComputedStyle(w).fontSize : null };
 });
 

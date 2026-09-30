@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode, type Ref } from "react";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import ViewToggle from "../ViewToggle";
-import { Generated, Placeholder } from "../LeadDetail/LeadDetail";
+import { DiscoveryQuestions, Placeholder } from "../LeadDetail/LeadDetail";
 import { objectionsFor } from "../../lib/intelligence";
 
 interface Props {
@@ -23,13 +23,12 @@ const STEPS: { label: string; cue: string; words: (item: QueueItem) => ReactNode
   {
     label: "Show your work",
     cue: "Pick one, ask it as a question",
-    words: (i) =>
-      i.roleIntelligence != null ? <Generated value={i.roleIntelligence} /> : <Placeholder>Show-your-work questions aren't generated yet.</Placeholder>,
+    words: () => <Placeholder>Show-your-work questions aren't generated yet.</Placeholder>,
   },
   {
     label: "Stop and ask",
     cue: "Now stop talking. The job order is in their answers. Ask, then wait.",
-    words: () => <Placeholder>Discovery questions aren't generated yet.</Placeholder>,
+    words: (i) => <DiscoveryQuestions item={i} />,
   },
   {
     label: "Light close",
@@ -177,12 +176,6 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
             <div className="guided-objections">
               {pushbacks.map((o, idx) => tap(o, idx === 0 ? firstObjection : undefined))}
             </div>
-            {item.objections != null && (
-              <div className="guided-more">
-                <h4 className="eyebrow">Other objections</h4>
-                <Generated value={item.objections} />
-              </div>
-            )}
           </section>
           <section>
             <h3 className="eyebrow">The gap</h3>

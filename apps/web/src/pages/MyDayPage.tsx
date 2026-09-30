@@ -5,7 +5,7 @@ import { SIGNAL_TYPE, confidenceLabel } from "../lib/provenance";
 import type { QueueItem } from "../lib/types";
 import OutcomePanel from "../components/OutcomePanel";
 import FunctionMatchTag from "../components/FunctionMatchTag";
-import { Generated, Placeholder } from "../components/LeadDetail/LeadDetail";
+import { Placeholder } from "../components/LeadDetail/LeadDetail";
 import JobDescription from "../components/JobDescription";
 import { equipmentFor, objectionsFor, plantArchetypeOf } from "../lib/intelligence";
 
@@ -25,12 +25,6 @@ function money(n: number, currency: string | null) {
   return !currency || currency === "USD" ? `$${amount}` : `${currency} ${amount}`;
 }
 const PER = { hour: "/hr", year: "/yr" } as const;
-
-/** role_intelligence as generation writes it ({ questions: [...] }); anything else is shown raw. */
-const questionsOf = (v: unknown) => {
-  const q = (v as { questions?: unknown } | null)?.questions;
-  return Array.isArray(q) && q.every((x) => typeof x === "string") && q.length ? (q as string[]) : null;
-};
 
 const tel = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
 
@@ -102,7 +96,6 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
   const equipment = equipmentFor(item);
   const days = item.postedDate ? daysSince(item.postedDate) : null;
   const seats = [item.openingCount !== null && plural(item.openingCount, "seat"), item.shift].filter(Boolean).join(", ");
-  const questions = questionsOf(item.roleIntelligence);
   const detail = (section: string) => `/leads/${item.id}?section=${section}`;
 
   return (
@@ -155,14 +148,8 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
           {item.openingScript ? <p>{item.openingScript}</p> : <Placeholder>Opening script isn't generated yet.</Placeholder>}
         </section>
 
-        <Panel className="md-floor grow" label="Show you know the floor — ask, don't tell" aside={questions && <span className="md-label-aside">Pick one</span>}>
-          {questions ? (
-            questions.map((q) => <blockquote key={q}>{q}</blockquote>)
-          ) : item.roleIntelligence != null ? (
-            <Generated value={item.roleIntelligence} />
-          ) : (
-            <Placeholder>Show-your-work questions aren't generated yet.</Placeholder>
-          )}
+        <Panel className="md-floor grow" label="Show you know the floor — ask, don't tell">
+          <Placeholder>Show-your-work questions aren't generated yet.</Placeholder>
           <div className="md-buttons">
             <Link className="md-button" to={detail("role")}>Discovery questions</Link>
             <Link className="md-button" to={detail("script")}>Full script</Link>

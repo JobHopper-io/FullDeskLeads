@@ -275,7 +275,10 @@ strong, b, th { font-weight: 500; }
 .l2-facts dd { margin: 0; }
 .l2-placeholder { margin: 0; font-size: 0.8125rem; color: var(--color-muted); border-left: 3px solid var(--fdl-hairline); padding-left: 10px; }
 .l2-script { margin: 0; white-space: pre-wrap; }
-.l2-raw { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.8125rem; }
+.l2-questions { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 0.875rem; line-height: 1.5; }
+.l2-objections { margin: 0; display: grid; gap: 14px; font-size: 0.875rem; }
+.l2-objections dt { font-weight: 500; }
+.l2-objections dd { margin: 2px 0 0; line-height: 1.5; }
 .l2-alternates { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.875rem; }
 .l2-flag { margin-top: 14px; display: grid; gap: 6px; justify-items: start; }
 .l2-flagged { margin: 14px 0 0; font-size: 0.8125rem; color: var(--fdl-green); background: var(--fdl-green-tint-08); border-radius: var(--fdl-radius); padding: 8px 10px; overflow-wrap: anywhere; }
@@ -305,7 +308,7 @@ strong, b, th { font-weight: 500; }
 .guided-card[data-state="live"] .guided-eyebrow { color: color-mix(in srgb, var(--fdl-ivory) 80%, transparent); }
 .guided-count { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .guided-words { margin: 0; font-size: 1rem; line-height: 1.5; white-space: pre-wrap; }
-.guided-card[data-state="live"] .guided-words, .guided-card[data-state="live"] .l2-raw { font-size: 1.25rem; line-height: 1.5; } /* 15pt: spec's 15-18pt script */
+.guided-card[data-state="live"] .guided-words, .guided-card[data-state="live"] .l2-questions { font-size: 1.25rem; line-height: 1.5; } /* 15pt: spec's 15-18pt script */
 .guided-card[data-state="live"] .l2-placeholder { font-size: 1.25rem; color: color-mix(in srgb, var(--fdl-ivory) 85%, transparent); border-left-color: var(--sidebar-line); }
 .guided-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
 .guided-next { background: var(--fdl-ivory); color: var(--fdl-green); border: 0; border-radius: var(--fdl-radius); padding: 9px 14px; font-size: 0.875rem; font-weight: 500; cursor: pointer; }
@@ -316,7 +319,6 @@ strong, b, th { font-weight: 500; }
 .guided-objection[aria-expanded="true"] { background: var(--fdl-green-tint-08); }
 .guided-answer { margin-top: 6px; padding: 8px 4px; outline: none; }
 .guided-answer:focus-visible { box-shadow: 0 0 0 2px var(--fdl-green); border-radius: var(--fdl-radius); }
-.guided-more { margin-top: 14px; }
 .guided-outcome { margin-top: 20px; scroll-margin-top: var(--l2-top, 160px); }
 
 /* Job description: the posting's own text in a native dialog, one line per sentence, list items bulleted. */

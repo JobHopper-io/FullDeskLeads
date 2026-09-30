@@ -7,6 +7,7 @@ import StateTag from "../StateTag";
 import FunctionMatchTag from "../FunctionMatchTag";
 import ViewToggle from "../ViewToggle";
 import JobDescription from "../JobDescription";
+import { discoveryQuestionsOf, objectionsFor } from "../../lib/intelligence";
 
 export type DetailSection = "script" | "role" | "objections";
 
@@ -25,8 +26,15 @@ export function Placeholder({ children }: { children: string }) {
   return <p className="l2-placeholder">{children}</p>;
 }
 
-// role_intelligence / objections have no defined shape until generation exists; show it raw rather than invent one.
-export const Generated = ({ value }: { value: unknown }) => <pre className="l2-raw">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>;
+/** The spec's fixed discovery questions stored on the lead, or the placeholder when it has none. */
+export function DiscoveryQuestions({ item }: { item: QueueItem }) {
+  const questions = discoveryQuestionsOf(item);
+  return questions ? (
+    <ol className="l2-questions">{questions.map((q) => <li key={q}>{q}</li>)}</ol>
+  ) : (
+    <Placeholder>Discovery questions aren't generated yet.</Placeholder>
+  );
+}
 
 // Layer 2 (spec 11.2): header + contact block pinned at the top so the phone number is never lost;
 // contact/provenance left, script + role intelligence + alternates centre, objections right.
@@ -114,8 +122,8 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
             {item.openingScript ? <p className="l2-script">{item.openingScript}</p> : <Placeholder>Opening script isn't generated yet.</Placeholder>}
           </section>
           <section id="role">
-            <h3>Role intelligence</h3>
-            {item.roleIntelligence != null ? <Generated value={item.roleIntelligence} /> : <Placeholder>Role intelligence isn't generated yet.</Placeholder>}
+            <h3>Discovery questions</h3>
+            <DiscoveryQuestions item={item} />
           </section>
           <section id="alternates">
             <h3>Alternate contacts</h3>
@@ -134,7 +142,14 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
         <div className="l2-right">
           <section id="objections">
             <h3>Objection handling</h3>
-            {item.objections != null ? <Generated value={item.objections} /> : <Placeholder>Objection handling isn't generated yet.</Placeholder>}
+            <dl className="l2-objections">
+              {objectionsFor(item).map((o) => (
+                <div key={o.objection}>
+                  <dt>“{o.objection}”</dt>
+                  <dd>“{o.response}”</dd>
+                </div>
+              ))}
+            </dl>
           </section>
         </div>
       </div>
