@@ -2,7 +2,7 @@ import { chromium } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-// Layer 2 layout check against the real app + API. Needs `pnpm dev` running (web :5173, api :3000) and the
+// Lead page (the Intelligence Sheet, spec Format 1) layout check against the real app + API. Needs `pnpm dev` running (web :5173, api :3000) and the
 // repo .env. Logs in as the seeded tenant-A user, then patches /api/leads responses in the browser only (no data
 // is changed) to inject the spec's long stress strings. Run from apps/web: node e2e/layer2-layout.mjs [screenshotDir]
 // Needs Chromium: npx playwright install chromium
@@ -40,29 +40,32 @@ async function run(label, patch, vp, section, buttonText) {
   // My Day's "Show you know the floor" links into Layer 2 at a section.
   await page.getByRole("link", { name: buttonText }).first().waitFor();
   await page.getByRole("link", { name: buttonText }).first().click();
-  await page.waitForSelector(".l2");
+  await page.waitForSelector(".lead-sheet");
   await page.waitForTimeout(300);
   const r = await page.evaluate((section) => {
     const box = (sel) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right }; };
-    const clipped = [...document.querySelectorAll(".l2-company,.l2-role,.l2-contact-name,.l2-email,.l2-facts dd,.l2 h3,.l2-placeholder")].filter((e) => e.scrollWidth > e.clientWidth + 1 || getComputedStyle(e).textOverflow === "ellipsis").map((e) => e.className || e.tagName);
+    const clipped = [...document.querySelectorAll(".md-company,.md-role,.md-contact-name,.md-contact-title,.md-gatekeeper,.l2-facts dd,.lead-sheet h3,.l2-placeholder")].filter((e) => e.scrollWidth > e.clientWidth + 1 || getComputedStyle(e).textOverflow === "ellipsis").map((e) => e.className || e.tagName);
+    const cols = [...document.querySelectorAll(".ls-cols > .md-col")].map((c) => { const b = c.getBoundingClientRect(); return { top: b.top, left: b.left, right: b.right }; });
+    const radios = [...document.querySelectorAll(".ls-log [role=radio]")].map((e) => e.getBoundingClientRect());
     return {
       hScroll: document.documentElement.scrollWidth > window.innerWidth,
       clipped,
-      phone: box(".l2-phone"), top: box(".l2-top"), target: box(`#${section}`),
-      left: box(".l2-left"), centre: box(".l2-centre"), right: box(".l2-right"),
-      company: document.querySelector(".l2-company").textContent, role: document.querySelector(".l2-role").firstChild.textContent,
-      leaked: /seamless|apollo|lever|greenhouse|priority|fit score|stage/i.test(document.querySelector('.l2').innerText),
-      texts: [...document.querySelectorAll(".l2-placeholder")].map((e) => e.textContent), facts: [...document.querySelectorAll(".l2-facts dt,.l2-facts dd")].map((e) => e.textContent),
+      phone: box(".ls-top .md-phone"), top: box(".ls-top"), target: box(`#${section}`), cols,
+      dispositions: radios.length, dispositionsOnScreen: radios.every((b) => b.top >= 0 && b.bottom <= window.innerHeight),
+      company: document.querySelector(".md-company").textContent, role: document.querySelector(".md-role").firstChild.textContent,
+      leaked: /seamless|apollo|lever|greenhouse|priority|fit score|stage/i.test(document.querySelector(".lead-sheet").innerText),
+      texts: [...document.querySelectorAll(".lead-sheet .l2-placeholder")].map((e) => e.textContent), facts: [...document.querySelectorAll(".l2-facts dt,.l2-facts dd")].map((e) => e.textContent),
     };
   }, section);
   console.log(`\n[${label}] ${vp.width}x${vp.height}, "${buttonText}" -> #${section}`);
   check(!r.hScroll, "no horizontal page scroll");
-  check(!r.leaked, "no vendor names, internal scores or pipeline detail in Layer 2");
+  check(!r.leaked, "no vendor names, internal scores or pipeline detail on the lead page");
   check(r.clipped.length === 0, `no truncated/clipped text (${r.clipped.join(",") || "none"})`);
   check(r.phone && r.phone.top >= 0 && r.phone.bottom <= vp.height, "phone number visible in the pinned header");
   check(r.target && r.target.top >= r.top.bottom - 1 && r.target.top < vp.height, "target section visible below the pinned header, not under it");
-  // Desktop only (spec §15: no responsive breakpoints): always three columns side by side.
-  check(Math.abs(r.left.top - r.centre.top) < 2 && Math.abs(r.centre.top - r.right.top) < 2 && r.left.right <= r.centre.left && r.centre.right <= r.right.left, "three columns side by side");
+  check(r.dispositions === 11 && r.dispositionsOnScreen, `all ${r.dispositions} dispositions on screen in the pinned outcome bar`);
+  // Desktop only (spec §15: no responsive breakpoints): the call and the opening always side by side.
+  check(r.cols.length === 2 && Math.abs(r.cols[0].top - r.cols[1].top) < 2 && r.cols[0].right <= r.cols[1].left, "two columns side by side");
   if (patch) check(r.company === patch.company && r.role.startsWith(patch.roleTitle), "full company and role text rendered");
   await page.screenshot({ path: `${SP}/l2-${label}-${vp.width}.png`, fullPage: true });
   if (label === "real") console.log("  provenance:", r.facts.join(" | "), "\n  placeholders:", r.texts);

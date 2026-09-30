@@ -255,37 +255,54 @@ strong, b, th { font-weight: 500; }
 .sheet-field { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--color-muted); }
 .sheet-field input, .sheet-field select { font: inherit; padding: 8px 10px; border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius); background: var(--fdl-ivory); color: var(--fdl-charcoal); }
 
-/* Layer 2 lead detail (spec 11.2). Header + contact block pinned; three columns. */
+/* Shared by Guided and the lead page: the pinned top row, the placeholder, the question list, provenance facts. */
 .l2 { padding: 0 48px 64px; max-width: 1440px; margin: 0 auto; }
 .l2 section { scroll-margin-top: var(--l2-top, 220px); }
-.l2 h2, .l2 h3, .l2-role, .l2-contact-name, .l2-facts dd, .l2-script, .l2-alternates li, .l2-email { overflow-wrap: anywhere; } /* long names/titles wrap, never truncate */
+.l2 h2, .l2 h3, .l2-role, .l2-facts dd { overflow-wrap: anywhere; } /* long names/titles wrap, never truncate */
 .l2-top { position: sticky; top: 0; z-index: 5; background: var(--fdl-ivory); padding: 16px 0 14px; border-bottom: 1px solid var(--fdl-hairline); display: grid; gap: 8px; }
 .l2-top-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .l2-top-row > .link-button { color: var(--fdl-green); }
 .l2-company { font-size: 1.75rem; line-height: 1.15; }
 .l2-role { font-size: 0.9375rem; color: var(--color-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.l2-contact { display: flex; gap: 8px 20px; align-items: baseline; flex-wrap: wrap; }
 .l2-phone { font-size: 2rem; font-weight: 500; color: var(--fdl-green); text-decoration: none; font-variant-numeric: tabular-nums; }
 .l2-phone.missing { color: var(--color-muted); font-weight: 500; font-size: 1.25rem; }
-.l2-contact-name { font-weight: 500; }
-.l2-email { font-size: 0.875rem; color: var(--color-muted); }
-.l2-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; padding-top: 20px; align-items: start; }
-.l2-left, .l2-centre, .l2-right { display: grid; gap: 20px; }
-.l2 section { background: var(--fdl-white); border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius-lg); padding: 18px 20px; }
 .l2 h3 { font-size: 1rem; margin-bottom: 10px; }
-.l2-facts { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 0.875rem; }
+.l2 section { background: var(--fdl-white); border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius-lg); padding: 18px 20px; }
+.l2-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 0.8125rem; }
 .l2-facts dt { color: var(--color-muted); }
-.l2-facts dd { margin: 0; }
+.l2-facts dd { margin: 0; overflow-wrap: anywhere; }
+.l2-facts a { color: var(--fdl-green); }
 .l2-placeholder { margin: 0; font-size: 0.8125rem; color: var(--color-muted); border-left: 3px solid var(--fdl-hairline); padding-left: 10px; }
-.l2-script { margin: 0; white-space: pre-wrap; }
-.l2-close { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--fdl-hairline); }
 .l2-questions { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 0.875rem; line-height: 1.5; }
-.l2-objections { margin: 0; display: grid; gap: 14px; font-size: 0.875rem; }
-.l2-objections dt { font-weight: 500; }
-.l2-objections dd { margin: 2px 0 0; line-height: 1.5; }
-.l2-alternates { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.875rem; }
 .l2-flag { margin-top: 14px; display: grid; gap: 6px; justify-items: start; }
 .l2-flagged { margin: 14px 0 0; font-size: 0.8125rem; color: var(--fdl-green); background: var(--fdl-green-tint-08); border-radius: var(--fdl-radius); padding: 8px 10px; overflow-wrap: anywhere; }
+
+/* Lead page = the Intelligence Sheet (spec Format 1, Figure 8.1's order) built from My Day's panels. The lead card is
+   pinned at the top (the phone never scrolls away) and the outcome bar at the bottom (every disposition on screen). */
+.lead-sheet { padding: 0 26px; display: flex; flex-direction: column; gap: 10px; }
+.lead-sheet [id] { scroll-margin-top: var(--l2-top, 260px); }
+.lead-sheet .l2-placeholder { font-size: 0.75rem; }
+.ls-top { position: sticky; top: 0; z-index: 5; background: var(--fdl-ivory); padding: 12px 0 10px; display: grid; gap: 10px; border-bottom: 1px solid var(--fdl-hairline); }
+.ls-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ls-cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.ls-script { display: grid; gap: 8px; }
+.lead-sheet .md-panel .l2-questions { font-size: 0.8125rem; gap: 6px; }
+.ls-role { font-size: 0.875rem; font-weight: 600; }
+.ls-gap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--panel-line); display: grid; gap: 4px; }
+.ls-gap .md-label { color: var(--accent-rust); }
+.ls-close { background: var(--accent-gold); border-radius: var(--fdl-radius); padding: 12px 18px 13px; }
+.ls-close .md-label { color: var(--fdl-charcoal); margin-bottom: 6px; }
+.ls-close p { margin: 0; font-size: 0.875rem; line-height: 1.45; }
+.ls-close .l2-placeholder { border-left-color: color-mix(in srgb, var(--fdl-charcoal) 30%, transparent); color: var(--fdl-charcoal); }
+.md-gatekeeper { overflow-wrap: anywhere; }
+.lead-sheet .md-alternates ul { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); column-gap: 24px; }
+.ls-flags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ls-flags li { background: var(--tag-bg); color: var(--label-green); border-radius: 2px; padding: 3px 8px; font-size: 0.6875rem; font-weight: 500; }
+.ls-flags li.risk { background: color-mix(in srgb, var(--accent-rust) 12%, var(--fdl-white)); color: var(--accent-rust); }
+.ls-provenance { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: start; }
+.ls-provenance .md-panel-head { grid-column: 1 / -1; }
+.ls-provenance .l2-flag, .ls-provenance .l2-flagged { margin-top: 0; }
+.ls-log { position: sticky; bottom: 0; z-index: 5; margin-bottom: 12px; box-shadow: 0 -6px 16px -10px rgb(0 0 0 / 0.25); }
 
 /* Guided Sheet (spec 9.2): a stepped call runner over the same lead. Brand-kit colours only. */
 .guided-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }

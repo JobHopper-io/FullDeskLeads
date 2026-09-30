@@ -71,15 +71,30 @@ for (const [n, i] of items.entries()) {
   // Lead page
   await page.goto(`${APP}/leads/${i.id}`); await page.waitForSelector("#objections dl");
   await noRaw("lead page", i);
-  check((await page.locator("#role h3").innerText()) === "Discovery questions", `lead page ${i.roleTitle}: section is titled Discovery questions`);
+  // Figure 8.1's order: evidence strip, the plant, then the call (open, show your work, then let him talk, light close)
+  // on the left beside the opening + gap and the pushback; routing strip and flags below.
+  const order = await page.$$eval(".lead-sheet .md-label", (ls) => ls.map((l) => l.textContent.trim().toLowerCase()));
+  const want = ["primary hiring contact", "the plant", "open", "show you know the floor — ask, don't tell", "then let him talk", "light close", "the opening", "the gap", "if he pushes back", "if he's not the one", "contact & source"];
+  check(eq(order, want), `lead page ${i.roleTitle}: sections in Figure 8.1's order (${order.join(" | ")})`);
+  check((await page.locator(".ls-stats .md-stat").count()) === 4, `lead page ${i.roleTitle}: four-fact evidence strip`);
   const shownQ = await page.locator("#role li").allInnerTexts();
   check(expectQ ? eq(shownQ, expectQ) : shownQ.length === 0 && (await page.locator("#role .l2-placeholder").count()) === 1, `lead page ${i.roleTitle}: questions ${expectQ ? "match stored" : "placeholder"}`);
   const shownO = await pairs("#objections dl");
   check(stored ? eq(shownO, quoted(stored)) : eq(shownO.map(([o]) => o), SLOTLESS.map((o) => `“${o}”`)), `lead page ${i.roleTitle}: objections ${stored ? "match stored" : "are the slotless pair (no archetype)"}`);
-  const script = page.locator("#script");
-  check(i.openingScript ? (await script.locator(".l2-script").innerText()) === i.openingScript : (await script.locator(".l2-placeholder").count()) === 1, `lead page ${i.roleTitle}: opening ${i.openingScript ? "stored text" : "placeholder"}`);
-  const leadClose = await script.locator(".l2-close").count();
-  check(leadClose === (arch ? 1 : 0), `lead page ${i.roleTitle}: light close ${arch ? "shown" : "absent"}`);
+  const opener = page.locator("#script .md-opening");
+  check(i.openingScript ? (await opener.locator("p:not(.l2-placeholder)").innerText()) === i.openingScript : (await opener.locator(".l2-placeholder").count()) === 1, `lead page ${i.roleTitle}: opening ${i.openingScript ? "stored text" : "placeholder"}`);
+  const leadClose = await page.locator(".ls-close p:not(.l2-placeholder)").count();
+  check(leadClose === (arch ? 1 : 0) && (await page.locator(".ls-close .l2-placeholder").count()) === (arch ? 0 : 1), `lead page ${i.roleTitle}: light close ${arch ? "shown" : "placeholder"}`);
+  const lsw = await page.locator("#script .md-floor blockquote").count();
+  check(floorRole ? lsw === 2 && (await page.locator("#script .md-floor .md-label-aside").innerText()) === "Pick one" : lsw === 0 && (await page.locator("#script .md-floor .l2-placeholder").count()) === 1, `lead page ${i.roleTitle}: show-your-work ${floorRole ? "two lines + Pick one" : "placeholder"}`);
+  check((await page.locator(".lead-sheet .md-descriptor").count()) === (arch ? 1 : 0), `lead page ${i.roleTitle}: descriptor ${arch ? "shown" : "placeholder"}`);
+  check((await page.locator(".lead-sheet .md-hard .l2-placeholder").count()) === (floorRole ? 0 : 1), `lead page ${i.roleTitle}: why-hard ${floorRole ? "shown" : "placeholder"}`);
+  check((await page.locator(".lead-sheet .md-chips li").count()) > 0 === floorRole, `lead page ${i.roleTitle}: equipment chips ${floorRole ? "shown" : "absent"}`);
+  const lgap = await page.locator(".ls-gap .md-gap-line").allInnerTexts();
+  check(lgap.length ? maint && lgap[1] === "That gap is your opening question." : (await page.locator(".ls-gap .l2-placeholder").count()) === 1, `lead page ${i.roleTitle}: gap ${lgap.length ? "line + opening-question follow-on" : "placeholder"}`);
+  check((await page.locator(".md-gatekeeper").innerText()).startsWith(`Gatekeeper line: “Calling ${i.contact.name.trim().split(/\s+/)[0]} back about the`), `lead page ${i.roleTitle}: gatekeeper line`);
+  const flags = await page.locator(".ls-flags li").allInnerTexts();
+  check(flags.includes("Union status unknown") && flags.includes("Site or corporate unknown") && flags.includes("Function match") === i.functionMatch && flags.includes("Req going cold") === (i.freshnessBand === "stale"), `lead page ${i.roleTitle}: flags ${flags.join(", ")}`);
 
   // Guided
   await page.goto(`${APP}/leads/${i.id}/guided`); await page.waitForSelector(".guided-card");

@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode, type Ref } from "react";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import ViewToggle from "../ViewToggle";
-import { DiscoveryQuestions, Placeholder } from "../LeadDetail/LeadDetail";
+import { DiscoveryQuestions, Placeholder } from "../IntelligenceSheet/IntelligenceSheet";
 import { objectionsFor, plantLayerFor } from "../../lib/intelligence";
 
 interface Props {
