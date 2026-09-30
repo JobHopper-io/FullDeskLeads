@@ -12,9 +12,10 @@ const db = createServiceClient(loadEnv());
 const [t1, t2] = await tenantRepository(db).listAll();
 const postings = hiringSignalPostingRepository(db);
 const { data: anyContact } = await db.from("contacts").select("id").limit(1).single();
+// Fetched before anything is inserted, so an unreachable board can't leave the temp company behind.
+const [liveLever, liveLever2] = ((await (await fetch("https://api.lever.co/v0/postings/spawglass?mode=json")).json()) as { id: string }[]).map((p) => p.id); // two, since (company, source, posting id) is unique
 const { data: company, error: companyErr } = await db.from("companies").insert({ name: "TEMP sweep co", domain: "temp-sweep.invalid" }).select("id").single();
 if (companyErr) throw companyErr; // a leftover from an interrupted run: remove it (and its rows) first
-const [liveLever, liveLever2] = ((await (await fetch("https://api.lever.co/v0/postings/spawglass?mode=json")).json()) as { id: string }[]).map((p) => p.id); // two, since (company, source, posting id) is unique
 const created = { signals: [] as string[], leads: [] as string[], assignments: [] as string[] };
 
 async function make(title: string, copy: { source: string; token: string; id: string } | null, states: [string, string | null][]) {
@@ -36,6 +37,18 @@ async function make(title: string, copy: { source: string; token: string; id: st
 const state = async (id: string) => (await db.from("lead_assignments").select("state").eq("id", id).single()).data!.state;
 const signal = async (id: string) => (await db.from("hiring_signals").select("status, status_reason, status_changed_at").eq("id", id).single()).data!;
 
+// Cleanup runs however the check ends: normally, on a failed assertion, or when interrupted (Ctrl-C, a timeout's kill).
+async function cleanup() {
+  await db.from("interaction_events").delete().in("lead_assignment_id", created.assignments);
+  await db.from("lead_assignments").delete().in("id", created.assignments);
+  await db.from("leads").delete().in("id", created.leads);
+  await db.from("hiring_signals").delete().in("id", created.signals);
+  await db.from("companies").delete().eq("id", company!.id); // company is set: setup throws above before anything else is created
+  const { count } = await db.from("hiring_signals").select("id", { count: "exact", head: true }).like("role_title", "TEMP%");
+  console.log("cleaned up; leftover temp signals:", count);
+}
+for (const sig of ["SIGINT", "SIGTERM"] as const) process.once(sig, () => void cleanup().finally(() => process.exit(130)));
+
 try {
   const dead = await make("TEMP dead posting", { source: "lever", token: "spawglass", id: "00000000-0000-0000-0000-0000000sweep1" }, [["new", null], ["contacted", null]]);
   const rule = await make("TEMP Talent Community", { source: "lever", token: "spawglass", id: liveLever2 }, [["new", null]]); // live posting, but a filter rule now excludes the title
@@ -49,15 +62,18 @@ try {
   const plan = await sweepEmittedLeads({ dryRun: true });
   assert.equal(await state(dead.assignmentIds[0]), "new", "dry run writes nothing");
   assert.equal((await signal(dead.signalId)).status, "active");
-  assert.ok(plan.findings.find((f) => f.hiringSignalId === dead.signalId && f.outcome === "expired"));
+  const planned = plan.findings.find((f) => f.hiringSignalId === dead.signalId && f.outcome === "expired")!;
+  assert.deepEqual([planned.expiredAssignmentIds, planned.protectedAssignmentIds], [[dead.assignmentIds[0]], [dead.assignmentIds[1]]], "the plan keeps the assignment with a logged call");
 
   const run = await sweepEmittedLeads();
   const outcome = (id: string) => run.findings.find((f) => f.hiringSignalId === id)?.outcome;
   console.log("outcomes:", JSON.stringify({ dead: outcome(dead.signalId), rule: outcome(rule.signalId), cantCheck: outcome(cantCheck.signalId), live: outcome(live.signalId), terminal: outcome(terminal.signalId) ?? "(not swept: not workable)" }));
 
-  // dead posting: BOTH tenants' assignments expire (including the contacted one), signal expired + stamped
+  // dead posting: the signal is expired + stamped; the assignment without a call expires, and the one with a logged call
+  // is never auto-expired: it stays contacted (in My Day and Follow-Ups), whatever the posting's status
   assert.equal(outcome(dead.signalId), "expired");
-  assert.deepEqual([await state(dead.assignmentIds[0]), await state(dead.assignmentIds[1])], ["expired", "expired"]);
+  assert.deepEqual([await state(dead.assignmentIds[0]), await state(dead.assignmentIds[1])], ["expired", "contacted"]);
+  assert.deepEqual(run.findings.find((f) => f.hiringSignalId === dead.signalId)!.protectedAssignmentIds, [dead.assignmentIds[1]]);
   const d = await signal(dead.signalId); assert.equal(d.status, "expired"); assert.ok(d.status_changed_at); assert.match(d.status_reason!, /^posting-gone/);
   // filter rule: excluded, reason from the rule, stamped
   assert.equal(outcome(rule.signalId), "excluded"); assert.equal(await state(rule.assignmentIds[0]), "expired");
@@ -77,14 +93,9 @@ try {
   const stamp = (await signal(dead.signalId)).status_changed_at;
   const again = await sweepEmittedLeads();
   assert.equal(again.findings.filter((f) => f.expiredAssignmentIds.length).length, 0, "second run expires nothing more");
+  assert.equal(await state(dead.assignmentIds[1]), "contacted", "the logged-call assignment stays protected on every later sweep");
   assert.equal((await signal(dead.signalId)).status_changed_at, stamp, "not restamped");
   console.log("ALL OK");
 } finally {
-  await db.from("interaction_events").delete().in("lead_assignment_id", created.assignments);
-  await db.from("lead_assignments").delete().in("id", created.assignments);
-  await db.from("leads").delete().in("id", created.leads);
-  await db.from("hiring_signals").delete().in("id", created.signals);
-  await db.from("companies").delete().eq("id", company!.id); // company is set: setup throws above before anything else is created
-  const { count } = await db.from("hiring_signals").select("id", { count: "exact", head: true }).like("role_title", "TEMP%");
-  console.log("cleaned up; leftover temp signals:", count);
+  await cleanup();
 }

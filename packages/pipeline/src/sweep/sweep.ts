@@ -23,13 +23,17 @@ export interface SweepFinding {
   detail: string | null;
   /** Assignments moved to expired (would be, in a dry run). */
   expiredAssignmentIds: string[];
+  /** Assignments left workable although the signal is no longer valid, because a recruiter has logged a call on them. */
+  protectedAssignmentIds: string[];
 }
 
 /**
  * Re-runs the same decisions the pipeline already makes before a lead exists — the filter rules and live re-verification —
  * against every lead a recruiter can still work, because a signal can be invalidated after its lead was emitted and
  * nothing else looks back. When a signal is no longer valid, its status is set (with status_changed_at, via setStatus)
- * and every workable assignment of that lead moves to expired. A can't-check result changes nothing.
+ * and every workable assignment of that lead moves to expired, except one with a logged call: an assignment with at
+ * least one interaction event is never auto-expired, whatever the posting's status (the recruiter is mid-conversation,
+ * and it stays in My Day and Follow-Ups). A can't-check result changes nothing.
  *
  * Never touches interaction_events, so a recruiter's call history stays exactly as logged.
  * dryRun reports what would change and writes nothing.
@@ -47,7 +51,7 @@ export async function sweepEmittedLeads(opts: { dryRun?: boolean } = {}): Promis
   const findings: SweepFinding[] = [];
   for (const [hiringSignalId, group] of bySignal) {
     const { lead_id: leadId, company, role_title: roleTitle, signal_status: status } = group[0];
-    const finding = { hiringSignalId, leadId, company, roleTitle, expiredAssignmentIds: [] as string[] };
+    const finding = { hiringSignalId, leadId, company, roleTitle, expiredAssignmentIds: [] as string[], protectedAssignmentIds: [] as string[] };
     const record = (outcome: SweepOutcome, detail: string | null) => findings.push({ ...finding, outcome, detail });
     try {
       let invalid: { outcome: SweepOutcome; detail: string } | null = null;
@@ -72,9 +76,12 @@ export async function sweepEmittedLeads(opts: { dryRun?: boolean } = {}): Promis
         }
       }
 
-      const ids = dryRun ? group.map((g) => g.id) : await assignments.expireWorkableForLead(leadId);
-      findings.push({ ...finding, ...invalid, expiredAssignmentIds: ids });
-      log.info({ hiringSignalId, leadId, company, roleTitle, ...invalid, assignments: ids.length, dryRun }, "lead sweep: signal no longer valid — assignment(s) expired");
+      // ponytail: a call logged between this check and the update below is not seen; the next sweep can't revive it.
+      const called = await assignments.withLoggedCalls(group.map((g) => g.id));
+      const keep = group.filter((g) => called.has(g.id)).map((g) => g.id);
+      const ids = dryRun ? group.filter((g) => !called.has(g.id)).map((g) => g.id) : await assignments.expireWorkableForLead(leadId, keep);
+      findings.push({ ...finding, ...invalid, expiredAssignmentIds: ids, protectedAssignmentIds: keep });
+      log.info({ hiringSignalId, leadId, company, roleTitle, ...invalid, assignments: ids.length, protectedWithCalls: keep.length, dryRun }, "lead sweep: signal no longer valid — assignment(s) expired, any with a logged call kept");
     } catch (error) {
       // One bad signal must not abort the sweep for every other lead.
       log.error({ hiringSignalId, err: error }, "lead sweep: failed on this signal — left as is");

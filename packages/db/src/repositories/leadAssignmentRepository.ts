@@ -76,16 +76,26 @@ export function leadAssignmentRepository(db: SupabaseClient) {
       }));
     },
 
-    // Lead sweep: a lead whose signal is no longer valid stops being workable for every tenant it was assigned to. Only
-    // the assignment's state moves. interaction_events (the recruiter's call history) and next_action_at are untouched,
-    // and the state guard means an assignment that reached a terminal state in the meantime is left alone.
-    expireWorkableForLead: async (leadId: string): Promise<string[]> => {
-      const { data, error } = await db
+    // Lead sweep: which of these assignments have at least one logged interaction event (a call a recruiter logged).
+    withLoggedCalls: async (assignmentIds: string[]): Promise<Set<string>> => {
+      if (!assignmentIds.length) return new Set();
+      const { data, error } = await db.from("interaction_events").select("lead_assignment_id").in("lead_assignment_id", assignmentIds);
+      if (error) throw error;
+      return new Set(data.map((r) => r.lead_assignment_id as string));
+    },
+
+    // Lead sweep: a lead whose signal is no longer valid stops being workable for every tenant it was assigned to,
+    // except the assignments in `keep` (those with a logged call). Only the assignment's state moves.
+    // interaction_events (the recruiter's call history) and next_action_at are untouched, and the state guard means an
+    // assignment that reached a terminal state in the meantime is left alone.
+    expireWorkableForLead: async (leadId: string, keep: string[] = []): Promise<string[]> => {
+      let query = db
         .from("lead_assignments")
         .update({ state: "expired", updated_at: new Date().toISOString() })
         .eq("lead_id", leadId)
-        .in("state", WORKABLE_ASSIGNMENT_STATES)
-        .select("id");
+        .in("state", WORKABLE_ASSIGNMENT_STATES);
+      if (keep.length) query = query.not("id", "in", `(${keep.join(",")})`);
+      const { data, error } = await query.select("id");
       if (error) throw error;
       return data.map((r) => r.id as string);
     },

@@ -75,6 +75,14 @@ export function matchStaffingFirmName(companyName: string): string | null {
 export const MAX_POSTING_AGE_DAYS = 14;
 
 /**
+ * The posting-age rule is built but OFF: no posting is excluded for age unless POSTING_AGE_FILTER_ENABLED is exactly
+ * "true". While it's off, live re-verification at emission (and in the sweep) is the only gate on whether a posting is
+ * still open. Why off: at 14 days it would exclude 348 of 376 active signals (companies leave real postings up for
+ * months), so it waits for a decision on the limit.
+ */
+export const postingAgeFilterEnabled = (): boolean => process.env.POSTING_AGE_FILTER_ENABLED === "true";
+
+/**
  * Read-only: the stale-posting reason, or null. Age is from the source's first-published date, else from when the
  * signal was first detected. With neither, the signal is kept (null) and the caller logs it.
  */
@@ -87,7 +95,7 @@ export function stalePostingReason(firstPublished: string | null, detectedAt: st
 
 /**
  * Read-only: the reason a signal should be excluded under the filter rules right now (role-title patterns, the
- * staffing-firm company name, then posting age), or null. The single decision point shared by the filter stage and the
+ * staffing-firm company name, then posting age when POSTING_AGE_FILTER_ENABLED is on), or null. The single decision point shared by the filter stage and the
  * lead sweep.
  */
 export async function filterReasonFor(hiringSignalId: string): Promise<string | null> {
@@ -101,6 +109,8 @@ export async function filterReasonFor(hiringSignalId: string): Promise<string | 
   const company = await companyRepository(db).findById(hiringSignal.company_id);
   const staffingWord = company ? matchStaffingFirmName(company.name) : null;
   if (staffingWord) return `staffing-firm: company name "${company?.name}" matches "${staffingWord}"`;
+
+  if (!postingAgeFilterEnabled()) return null; // age rule off: nothing below runs
 
   // The first-published date comes from the source's own payload, not the stored posted_date: for Greenhouse that
   // column falls back to updated_at when first_published is missing, and an edit must not make a posting look new.
