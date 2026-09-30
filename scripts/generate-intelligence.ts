@@ -78,14 +78,17 @@ const reviewFrom = arg("review");
 if (reviewFrom) {
   if (!reviewer) throw new Error("--review: set INTELLIGENCE_REVIEWER (gemma or claude)");
   const staging = JSON.parse(readFileSync(reviewFrom, "utf8")) as Staging;
-  for (const r of staging.results.filter(qaPassed)) {
+  const toReview = staging.results.filter(qaPassed);
+  for (const r of toReview) r.review = null; // a review from an earlier run never counts for this one
+  for (const [n, r] of toReview.entries()) {
     r.review = await reviewGeneration(reviewer, r.inputs, r.generation!);
     logReview(r);
+    if (!r.review.ok && creditLimited(r.review.error)) { stopForCredit(n + 1, toReview.length, "review(s)"); break; }
   }
   writeFileSync(out, JSON.stringify({ ...staging, reviewedAt: new Date().toISOString() }, null, 2));
-  const reviewed = staging.results.filter(qaPassed);
-  console.log(`\nreview:${reviewer} on ${reviewed.length} QA passes: ${reviewed.filter(cleared).length} pass, ${reviewed.filter((r) => !cleared(r)).length} fail | written to ${out} (no database writes)`);
-  process.exit(0);
+  const reviewed = toReview.filter((r) => r.review);
+  console.log(`\nreview:${reviewer} on ${reviewed.length} of ${toReview.length} QA passes: ${reviewed.filter(cleared).length} pass, ${reviewed.filter((r) => !cleared(r)).length} fail, ${toReview.length - reviewed.length} not reviewed | written to ${out} (no database writes)`);
+  process.exit(process.exitCode ?? 0);
 }
 const ids = arg("ids")?.split(",").filter(Boolean);
 
