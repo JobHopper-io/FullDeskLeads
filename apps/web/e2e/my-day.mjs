@@ -132,7 +132,10 @@ const alts = await page.locator(".md-alternates li").allInnerTexts();
 check(alts.length === pick.alternateContacts.length, `alternates: ${alts.length ? alts.map((a) => a.replace(/\n/g, " ")).join(" | ") : "(none on this lead)"}`);
 await page.unroute("**/api/leads");
 
-const floor = items.find((i) => active(i) && due(i) && tier(i) === 2 && i.company === "Industrial Electric Manufacturing" && /field service|technician/i.test(i.roleTitle));
+// The tallest plant-floor sheet: every plant line on screen, plus the longest stored opening.
+const floor = items.filter((i) => active(i) && due(i) && tier(i) === 2 && i.company === "Industrial Electric Manufacturing" && /field service|test supervisor|quality control|production (controller|planner)|materials supervisor|site supervisor|manufacturing engineer|maintenance|technician/i.test(i.roleTitle))
+  .sort((a, b) => b.openingScript.length - a.openingScript.length)[0];
+const fits = async () => (await page.evaluate(() => document.documentElement.scrollHeight)) <= 900 && (await save.boundingBox()).y + (await save.boundingBox()).height <= 900;
 await page.route("**/api/leads", async (route) => {
   const res = await route.fetch(); const body = await res.json();
   const i = body.findIndex((x) => x.id === floor.id); body.unshift(...body.splice(i, 1));
@@ -142,6 +145,21 @@ await page.goto(`${APP}/my-day`, { waitUntil: "networkidle" });
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${SP}/my-day-plant-floor.png` });
 check((await page.locator(".md-chips li").count()) === 6, `equipment chips shown for plant-floor role ${floor.roleTitle}`);
+check((await page.locator(".md-descriptor").count()) === 1 && (await page.locator(".md-floor blockquote").count()) === 2 && !(await page.locator(".md-hard .l2-placeholder").count()), "descriptor, why-hard and both show-your-work lines on screen");
+check(await fits(), `fully populated plant-floor sheet fits 1440x900 with Save + next lead on screen (${floor.roleTitle.trim()}, ${floor.openingScript.length}-char opening)`);
+await page.unroute("**/api/leads");
+
+// A bare lead ranks last, so it's shown by making it the only workable lead (browser-only).
+const bare = items.find((i) => !i.openingScript && !i.roleIntelligence && !i.alternateContacts.length);
+await page.route("**/api/leads", async (route) => {
+  const body = await (await route.fetch()).json();
+  await route.fulfill({ json: body.map((x) => (x.id === bare.id ? { ...x, state: "new", nextActionAt: null } : { ...x, state: "expired" })) });
+});
+await page.goto(`${APP}/my-day`, { waitUntil: "networkidle" });
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${SP}/my-day-bare.png` });
+check((await page.locator(".md-role").innerText()).startsWith(bare.roleTitle.trim()) && (await page.locator(".md-descriptor").count()) === 0, `bare lead on screen with placeholders (${bare.company} · ${bare.roleTitle.trim()})`);
+check(await fits(), "bare sheet fits 1440x900 with Save + next lead on screen");
 await page.unroute("**/api/leads");
 
 console.log("5. Save + next lead logs a real outcome and moves on (restored after)");
