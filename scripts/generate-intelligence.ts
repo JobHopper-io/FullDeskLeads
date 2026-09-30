@@ -27,6 +27,13 @@ export const QA_ONLY = `courier:${MODEL}; review:qa_only`;
 type Result = GenerationResult & { leadId: string; company: string; employer: string | null; signalStatus: string; review: ReviewResult | null };
 interface Staging { generatedAt: string; handCheck: string[]; results: Result[]; noArchetype: { leadId: string; company: string; employer: string | null; roleTitle: string }[] }
 
+/** Courier's credit limit for the period (HTTP 429): every later call fails the same way, so the run stops there. */
+const creditLimited = (error: string | null | undefined) => !!error?.startsWith("courier: HTTP 429");
+const stopForCredit = (done: number, total: number, what: string) => {
+  console.log(`\nSTOPPED at Courier's credit limit (HTTP 429): ${total - done} ${what} not attempted; the output holds only the ${done} above.`);
+  process.exitCode = 1;
+};
+
 const db = createServiceClient(loadEnv());
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 
@@ -104,6 +111,7 @@ for (const [row, key, employer] of inScope) {
   const failed = r.verification ? Object.entries(r.verification.fields).filter(([, f]) => f.status === "fail").map(([n]) => n) : [];
   const nulls = r.verification ? Object.entries(r.verification.fields).filter(([, f]) => f.status === "null").map(([n]) => n) : [];
   console.log(`${r.ok ? (r.verification!.pass && !nulls.length ? "PASS" : nulls.length && !failed.length ? "NULL" : "QA FAIL") : "GEN FAIL"}  ${employer} | ${r.roleTitle} | signal ${s.status} | ${(r.latencyMs / 1000).toFixed(1)}s${r.error ? ` | ${r.error}` : ""}${failed.length ? ` | failing: ${failed.join(", ")}` : ""}${nulls.length ? ` | null: ${nulls.join(", ")}` : ""}`);
+  if (creditLimited(r.error)) { stopForCredit(results.length, inScope.length, "lead(s)"); break; }
 }
 
 const passes = (r: Result) => r.ok && r.verification!.pass && Object.values(r.verification!.fields).every((f) => f.status === "pass");
