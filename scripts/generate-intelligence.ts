@@ -2,6 +2,8 @@
 //   tsx --env-file=.env scripts/generate-intelligence.ts --out=<staging.json> [--ids=<hiring_signal_id,...>]
 //     Generates for every emitted lead (or exactly those signals) and writes NOTHING to the database: every result, with
 //     the exact inputs the model saw and its QA verdict, goes to --out for a hand check.
+//   tsx --env-file=.env scripts/generate-intelligence.ts --review=<staging.json> --out=<reviewed.json>
+//     Re-runs only the review pass (INTELLIGENCE_REVIEWER must be set) on a staging file's QA passes; no regeneration.
 //   tsx --env-file=.env scripts/generate-intelligence.ts --write=<staging.json> [--hold=<hiring_signal_id,...>]
 //     (--hold: QA passes the hand check rejected; they get the fixed content only, like a QA failure.)
 //     Writes a hand-checked staging file to the leads, with no model call:
@@ -70,8 +72,21 @@ if (writeFrom) {
 }
 
 const out = arg("out");
-if (!out) throw new Error("usage: generate-intelligence.ts --out=<staging.json> [--ids=...] | --write=<staging.json>");
+if (!out) throw new Error("usage: generate-intelligence.ts --out=<staging.json> [--ids=...] | --review=<staging.json> --out=<reviewed.json> | --write=<staging.json>");
 
+const reviewFrom = arg("review");
+if (reviewFrom) {
+  if (!reviewer) throw new Error("--review: set INTELLIGENCE_REVIEWER (gemma or claude)");
+  const staging = JSON.parse(readFileSync(reviewFrom, "utf8")) as Staging;
+  for (const r of staging.results.filter(qaPassed)) {
+    r.review = await reviewGeneration(reviewer, r.inputs, r.generation!);
+    logReview(r);
+  }
+  writeFileSync(out, JSON.stringify({ ...staging, reviewedAt: new Date().toISOString() }, null, 2));
+  const reviewed = staging.results.filter(qaPassed);
+  console.log(`\nreview:${reviewer} on ${reviewed.length} QA passes: ${reviewed.filter(cleared).length} pass, ${reviewed.filter((r) => !cleared(r)).length} fail | written to ${out} (no database writes)`);
+  process.exit(0);
+}
 const ids = arg("ids")?.split(",").filter(Boolean);
 
 type Row = { id: string; hiring_signals: HiringSignalRow & { companies: { name: string }; raw_signals: { raw_payload: { rawPayload: unknown } } | null } };
