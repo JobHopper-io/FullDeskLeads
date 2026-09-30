@@ -13,6 +13,8 @@ export const isDue = (i: QueueItem) => !i.nextActionAt || Date.parse(i.nextActio
 export const isOverdue = (i: QueueItem) => isActive(i) && !!i.nextActionAt && Date.parse(i.nextActionAt) < Date.now();
 /** Local midnight today, in ms: "today" is the recruiter's own day. */
 export const startOfToday = () => new Date().setHours(0, 0, 0, 0);
+/** An active lead whose follow-up falls before the end of today, overdue included (Follow-Ups' "Due today"). */
+export const isFollowUpDueToday = (i: QueueItem) => isActive(i) && !!i.nextActionAt && Date.parse(i.nextActionAt) < new Date().setHours(24, 0, 0, 0);
 /** "no_answer" -> "No answer"; anything else (legacy event types like "contacted") is capitalized as-is. */
 export const dispositionLabel = (d: string) => DISPOSITIONS.find((x) => x.value === d)?.label ?? d[0].toUpperCase() + d.slice(1).replace(/_/g, " ");
 

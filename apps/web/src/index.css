@@ -14,75 +14,152 @@ h1, h2, h3 { font-family: var(--fdl-font-display); font-weight: 600; margin: 0; 
 /* The kit ships Inter at 400 and 500 only: nothing asks for more, so the browser never fakes a bold. */
 strong, b, th { font-weight: 500; }
 .link-button { background: none; border: 1px solid currentColor; color: inherit; border-radius: var(--fdl-radius); padding: 4px 10px; font-size: 0.8125rem; }
-/* Small caps-style section label, used wherever a heading should whisper (rail, counters, table head). */
-.eyebrow, .my-day-rail h2, .leads-table th, .counter dt { font-family: var(--fdl-font-text); font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); color: var(--color-muted); }
+/* Small caps-style section label, used wherever a heading should whisper (table head, side headings). */
+.eyebrow, .leads-table th { font-family: var(--fdl-font-text); font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); color: var(--color-muted); }
 
 /* ── Shell: fixed green sidebar, ivory main. ───────────────────────────── */
-:root { --sidebar-w: 232px; }
+:root { --sidebar-w: 228px; }
 .app { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); min-height: 100vh; }
+/* Full-bleed green column (spec Figure 8.2): wordmark, WORKSPACE, the six screens, the seat at the foot. */
 .sidebar { position: sticky; top: 0; height: 100vh; box-sizing: border-box; background: var(--fdl-green); color: var(--fdl-ivory);
-  display: flex; flex-direction: column; padding: 28px 16px 20px; }
-/* The supplied wordmark file (never re-typed). 176px: over the kit's 130px minimum, clear space ≥ 1× the F's cap height. */
-.wordmark { display: block; padding: 4px 12px 32px; }
-.wordmark img { display: block; width: 176px; height: auto; }
-.app-nav { display: flex; flex-direction: column; gap: 2px; }
-.app-nav a { color: inherit; text-decoration: none; font-size: 0.9375rem; padding: 9px 12px; border-radius: var(--fdl-radius); opacity: 0.72;
-  display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.app-nav a:hover { opacity: 1; background: var(--sidebar-hover); }
-.app-nav a.active { opacity: 1; background: var(--sidebar-active); font-weight: 500; box-shadow: inset 3px 0 0 var(--fdl-ivory); }
+  display: flex; flex-direction: column; padding: 26px 0 0; }
+/* The supplied wordmark file (never re-typed). 143px as in the figure: over the kit's 130px minimum. */
+.wordmark { display: block; padding: 0 22px 30px; }
+.wordmark img { display: block; width: 143px; height: auto; }
+.app-nav { display: flex; flex-direction: column; }
+.nav-label { padding: 0 22px 12px; font-size: 0.625rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); color: color-mix(in srgb, var(--fdl-ivory) 55%, transparent); }
+.app-nav a { color: color-mix(in srgb, var(--fdl-ivory) 88%, transparent); text-decoration: none; font-size: 0.8125rem; line-height: 1.25; padding: 10px 22px; min-height: 17px;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap; box-shadow: inset 3px 0 0 transparent; }
+.app-nav a:hover { color: var(--fdl-ivory); background: var(--sidebar-hover); }
+.app-nav a.active { color: var(--fdl-ivory); background: var(--sidebar-deep); font-weight: 500; box-shadow: inset 3px 0 0 var(--accent-gold); }
 .app-nav .soon { margin-left: auto; font-size: 0.625rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); opacity: 0.6; }
-.overdue-badge { margin-left: auto; background: var(--color-danger); color: var(--fdl-ivory); border-radius: var(--fdl-radius); padding: 1px 7px; font-size: 0.75rem; font-weight: 500; font-variant-numeric: tabular-nums; }
-.account { margin-top: auto; padding: 16px 12px 0; border-top: 1px solid var(--sidebar-line); display: grid; gap: 4px; justify-items: start; font-size: 0.8125rem; }
-.account-email { overflow-wrap: anywhere; opacity: 0.9; }
-.account-role { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); opacity: 0.6; margin-bottom: 8px; }
-.account .link-button { opacity: 0.85; }
-.main { min-width: 0; }
+.nav-badge { margin-left: auto; min-width: 12px; text-align: center; background: color-mix(in srgb, var(--fdl-ivory) 14%, transparent); color: var(--fdl-ivory); border-radius: 999px;
+  padding: 1px 7px; font-size: 0.6875rem; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.45; }
+.app-nav a.active .nav-badge { background: var(--accent-gold); color: var(--fdl-green); }
+.nav-badge.overdue, .app-nav a.active .nav-badge.overdue { background: var(--color-danger); color: var(--fdl-ivory); }
+.account { margin-top: auto; padding: 16px 22px 18px; border-top: 1px solid var(--sidebar-line); display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 10px; }
+.account-initials { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--fdl-ivory) 14%, transparent); font-size: 0.6875rem; font-weight: 500; }
+.account-who { display: grid; min-width: 0; line-height: 1.3; }
+.account-name { font-size: 0.8125rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-role { display: block; font-size: 0.6875rem; color: color-mix(in srgb, var(--fdl-ivory) 60%, transparent); }
+.account-role::first-letter { text-transform: uppercase; }
+.account-signout { grid-column: 2; justify-self: start; background: none; border: 0; padding: 4px 0 0; color: color-mix(in srgb, var(--fdl-ivory) 60%, transparent); font-size: 0.75rem; }
+.account-signout:hover { color: var(--fdl-ivory); text-decoration: underline; }
+.main { min-width: 0; position: relative; }
 .app-notice { margin: 20px 48px 0; }
-/* Above My Day, the notice lines up with the centred block rather than the page edge. */
-.app-notice:has(+ .my-day) { max-width: var(--my-day-w); margin: 20px auto 0; padding: 0 48px; }
+/* On My Day the notice sits in the header's empty middle, so it never pushes the sheet down. */
+.app-notice:has(+ .my-day) { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); margin: 0; max-width: 34%; text-align: center; }
 
 .page { padding: 40px 48px 64px; display: grid; gap: 24px; align-content: start; max-width: 1280px; }
 .page h2 { font-size: 1.25rem; }
 .cell-sub { font-size: 0.75rem; color: var(--color-muted); }
 
-/* ── My Day ─────────────────────────────────────────────────────────────
-   Bounded, left-aligned block. ≥1200: rail beside the card; 800–1199: rail under it; <800 stacked. */
-/* One centred work area: counters, card (still capped at 680) and rail share a 1040px block (plus the 48px gutters;
-   boxes are border-box), so wide screens get even margins on both sides. The rail sits at the block's right edge. */
-:root { --my-day-w: calc(1040px + 2 * 48px); }
-/* Top-anchored: the counter strip is the work area's header, so the card follows it closely (16px), not as a
-   separate piece. Empty space below the card on a tall screen is expected. */
-.my-day { padding: 36px 48px 64px; display: grid; gap: 16px; max-width: var(--my-day-w); margin: 0 auto; }
-/* Counters: one slim strip, numbers set inline with their label; overdue is a filled red segment. */
-.counters { display: flex; flex-wrap: wrap; align-items: stretch; margin: 0; border-top: 1px solid var(--fdl-hairline); border-bottom: 1px solid var(--fdl-hairline); }
-.counter { display: flex; align-items: baseline; gap: 10px; padding: 12px 24px; border-right: 1px solid var(--fdl-hairline); }
-.counter:first-child { padding-left: 0; }
-.counter:last-child { border-right: 0; }
-.counter dt { order: 2; }
-.counter dd { margin: 0; font-size: 1.375rem; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1; }
-.counter.alert { background: var(--color-danger); border-right-color: var(--color-danger); }
-.counter.alert dd, .counter.alert dt { color: var(--fdl-ivory); }
-.counter.overdue:not(.alert) dd { color: var(--color-danger); }
-.my-day-main { display: grid; grid-template-columns: minmax(0, 680px) 300px; justify-content: space-between; gap: 40px; align-items: start; }
-.my-day-rail { display: grid; gap: 4px; align-content: start; }
-.rail-more { margin: 8px 0 0; font-size: 0.8125rem; color: var(--color-muted); }
+/* ── My Day (spec Figure 8.2, 1440×900). White header band; below it two columns of white panels on ivory. The left
+   column is the call in order, the right is what you glance at; the flexible panel in each (show-your-work, objections)
+   takes the slack so both columns end on the same line. ─────────────────────────────── */
+.my-day { min-height: 100vh; display: flex; flex-direction: column; }
+.md-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 11px 26px 10px; min-height: 48px;
+  background: var(--fdl-white); border-bottom: 1px solid var(--panel-line); }
+.md-title { font-size: 1.625rem; line-height: 1.15; color: var(--fdl-charcoal); }
+.md-sub { margin: 2px 0 0; font-size: 0.75rem; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.md-header-right { display: flex; align-items: center; gap: 14px; }
+.md-guided { color: var(--fdl-green); font-size: 0.75rem; font-weight: 500; text-decoration: none; margin-right: 10px; }
+.md-guided::after { content: " →"; }
+.md-guided:hover { text-decoration: underline; text-underline-offset: 3px; }
+.md-mode-label { font-size: 0.625rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); color: var(--color-muted); }
+.md-mode { display: inline-flex; border: 1px solid var(--fdl-hairline); border-radius: 4px; overflow: hidden; background: var(--fdl-white); }
+.md-mode button { border: 0; background: none; padding: 7px 14px; font-size: 0.75rem; color: var(--color-muted); display: inline-flex; align-items: center; gap: 6px; }
+.md-mode button[aria-pressed="true"] { background: var(--fdl-green); color: var(--fdl-ivory); font-weight: 500; }
+.md-mode button:disabled { cursor: not-allowed; }
+.md-mode .soon { font-size: 0.5625rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); border: 1px solid var(--fdl-hairline); border-radius: 3px; padding: 0 4px; }
 
-/* Up next: a plain list, hairline-separated. Deliberately nothing like the card. */
-.queue-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.queue-list li + li { border-top: 1px solid var(--fdl-hairline); }
-.queue-row { width: 100%; text-align: left; background: none; color: inherit; border: 0; padding: 12px 8px 12px 0; display: grid; gap: 3px; }
-.queue-row:hover .company { text-decoration: underline; text-underline-offset: 3px; }
-.queue-row[aria-current="true"] { box-shadow: inset 3px 0 0 var(--fdl-green); padding-left: 12px; }
-.queue-row .top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; align-items: baseline; } /* a long tag row drops under the company name instead of squeezing it */
-.queue-row .tags { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-.queue-row .tags .state-tag { order: -1; }
-.queue-row .company { font-weight: 500; font-size: 0.875rem; }
-.queue-row .meta { font-size: 0.8125rem; color: var(--color-muted); }
-.queue-row .foot { display: flex; gap: 2px 10px; flex-wrap: wrap; font-size: 0.6875rem; color: var(--color-muted); }
-/* The contact line: a small handset marks who to call; in the rail the name also steps up from the muted metadata. */
-.contact { display: inline-flex; align-items: center; gap: 5px; }
-.contact-glyph { width: 0.9em; height: 0.9em; flex-shrink: 0; fill: none; stroke: var(--fdl-green); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.queue-row .foot .contact { color: var(--fdl-charcoal); }
+.md-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 398px; gap: 20px; padding: 14px 26px 12px; align-items: stretch; }
+.md-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.md-col > .grow { flex: 1; }
+.md-panel { background: var(--fdl-white); border: 1px solid var(--panel-line); border-radius: var(--fdl-radius); padding: 14px 18px; }
+.md-panel-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.md-label { font-family: var(--fdl-font-text); font-size: 0.625rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); color: var(--label-green); margin: 0; }
+.md-label-aside { font-size: 0.6875rem; color: var(--color-muted); }
+.md-floor .md-panel-head .md-label-aside { margin-left: auto; }
+.my-day .l2-placeholder { font-size: 0.75rem; }
+
+/* Top card: who and where on the left, the person to call inset on the right. */
+.md-lead { display: grid; grid-template-columns: minmax(0, 1fr) 288px; gap: 20px; align-items: start; padding: 13px 12px 13px 18px; }
+.md-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.md-tag, .md-tags .tag.function-match { display: inline-block; padding: 2px 7px; border-radius: 2px; background: var(--tag-bg); color: var(--label-green);
+  font-size: 0.625rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); line-height: 1.5; }
+.md-tags .tag.function-match::before { display: none; }
+.md-company { font-size: 1.75rem; line-height: 1.15; color: var(--fdl-charcoal); overflow-wrap: anywhere; }
+.md-role { margin-top: 4px; font-size: 0.875rem; overflow-wrap: anywhere; }
+.md-meta { margin-top: 3px; font-size: 0.6875rem; color: var(--color-muted); overflow-wrap: anywhere; }
+.md-contact { background: var(--inset-bg); border: 1px solid var(--panel-line); border-radius: var(--fdl-radius); padding: 14px 14px 12px; display: grid; gap: 1px; min-width: 0; }
+.md-contact .md-label { margin-bottom: 8px; }
+.md-contact-name { font-size: 0.875rem; font-weight: 500; overflow-wrap: anywhere; }
+.md-contact-title { font-size: 0.6875rem; color: var(--color-muted); overflow-wrap: anywhere; }
+.md-phone { margin: 8px 0 6px; font-family: var(--fdl-font-display); font-size: 2.125rem; font-weight: 500; line-height: 1.05; color: var(--fdl-green); text-decoration: none; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.md-phone.missing { font-family: var(--fdl-font-text); font-size: 1.125rem; font-weight: 500; color: var(--color-muted); }
+.md-contact-meta { font-size: 0.5625rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--color-muted); }
+
+/* The plant: a green rule on the left marks the one band that is about the place, not the call. */
+.md-plant { border-left: 3px solid var(--fdl-green); display: grid; gap: 7px; padding-top: 12px; padding-bottom: 12px; }
+.md-plant .md-panel-head { margin-bottom: 0; }
+.md-descriptor { margin: 0; font-size: 0.8125rem; font-weight: 600; line-height: 1.4; }
+.md-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.md-chips li { background: var(--chip-bg); border-radius: 3px; padding: 3px 8px; font-size: 0.6875rem; }
+.md-chips li::first-letter { text-transform: uppercase; }
+.md-hard { font-size: 0.75rem; line-height: 1.45; }
+.md-hard .l2-placeholder { display: inline; border: 0; padding: 0; }
+
+.md-opening { background: var(--fdl-green); color: var(--fdl-ivory); border-radius: var(--fdl-radius); padding: 12px 18px 13px; }
+.md-opening .md-label { color: color-mix(in srgb, var(--fdl-ivory) 60%, transparent); margin-bottom: 6px; }
+.md-opening p { margin: 0; font-size: 0.875rem; line-height: 1.4; white-space: pre-wrap; }
+.md-opening .l2-placeholder { color: color-mix(in srgb, var(--fdl-ivory) 80%, transparent); border-left-color: var(--sidebar-line); font-size: 0.8125rem; }
+
+.md-floor { display: flex; flex-direction: column; gap: 7px; padding-top: 12px; padding-bottom: 12px; }
+.md-floor .md-panel-head { margin-bottom: 0; }
+.md-floor blockquote { margin: 0; border-left: 3px solid var(--accent-gold-muted); padding: 0 0 0 10px; font-size: 0.75rem; line-height: 1.45; }
+.md-buttons { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 9px; border-top: 1px solid var(--panel-line); }
+.md-button { background: var(--fdl-white); border: 1px solid var(--chip-line); border-radius: 4px; padding: 5px 12px; font-size: 0.75rem; font-weight: 500; color: var(--fdl-charcoal); text-decoration: none; }
+.md-button:hover:not(:disabled) { border-color: var(--fdl-green); }
+.md-button:disabled { color: var(--color-muted); cursor: not-allowed; }
+
+/* Log the result: every disposition inline as a squared chip; save pinned bottom right. */
+.md-log .outcome-panel { gap: 10px; }
+.md-log .eyebrow { color: var(--label-green); }
+.md-log .disposition-grid { gap: 6px; }
+.md-log .outcome-button { font-size: 0.75rem; padding: 9px 16px; }
+.md-log .eyebrow { font-size: 0.625rem; }
+.md-log .chip { background: var(--fdl-white); border-color: var(--chip-line); border-radius: 4px; padding: 5px 10px; font-size: 0.75rem; }
+.md-log .chip[aria-checked="true"] { background: var(--fdl-green); border-color: var(--fdl-green); color: var(--fdl-ivory); font-weight: 500; }
+.outcome-panel.pinned { grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
+.outcome-panel.pinned > .eyebrow, .outcome-panel.pinned > .outcome-detail { grid-column: 1 / -1; }
+.outcome-panel.pinned > .outcome-footer { grid-column: 2; align-self: end; }
+.outcome-panel.pinned .outcome-save { grid-template-columns: minmax(0, 1fr); }
+
+/* Right column. */
+.md-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.md-stat { background: var(--fdl-white); border: 1px solid var(--panel-line); border-radius: var(--fdl-radius); padding: 8px 12px 10px; min-width: 0; }
+.md-stat-value { font-family: var(--fdl-font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.2; color: var(--fdl-green); font-variant-numeric: lining-nums; overflow-wrap: anywhere; }
+.md-stat.accent .md-stat-value { color: var(--accent-rust); font-size: 1.0625rem; line-height: 1.45; }
+.md-stat .md-dash { color: var(--fdl-silver); font-weight: 500; }
+.md-stat-label { font-size: 0.625rem; color: var(--color-muted); overflow-wrap: anywhere; }
+.md-gap .md-label { color: var(--accent-rust); }
+.md-gap-line { margin: 0; font-size: 0.75rem; line-height: 1.5; }
+.md-gap-line + .md-gap-line { margin-top: 8px; }
+.md-objections { margin: 0; display: grid; gap: 12px; }
+.md-objections dt { font-weight: 500; font-size: 0.75rem; }
+.md-objections dd { margin: 2px 0 0; font-size: 0.75rem; line-height: 1.5; color: color-mix(in srgb, var(--fdl-charcoal) 85%, var(--fdl-white)); }
+.md-alternates ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.75rem; }
+.md-alternates li { display: flex; justify-content: space-between; gap: 12px; }
+.md-alternates li > span { min-width: 0; overflow-wrap: anywhere; }
+.md-alt-title { color: var(--color-muted); }
+.md-alternates a { color: var(--fdl-green); font-weight: 500; text-decoration: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Below ~1100px the right column drops under the call. */
+@media (max-width: 1100px) {
+  .md-body { grid-template-columns: minmax(0, 1fr); }
+  .md-lead { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ── Tags: one hierarchy. State is the loud one (new = solid, contacted = outlined), freshness is a dot
    and a word, confidence is plain muted text wherever it appears. ─────────────────────────── */
@@ -150,26 +227,6 @@ strong, b, th { font-weight: 500; }
 .stub { max-width: 640px; }
 .stub p { margin: 0; color: var(--color-muted); }
 
-/* ── Lead card, Layer 1. The phone number is the page's focal point; everything else steps back. ── */
-.lead-card { background: var(--fdl-white); border-radius: var(--fdl-radius-lg); padding: 40px 44px 32px; display: grid; gap: 14px; max-width: 680px; box-shadow: 0 0 0 1px var(--fdl-hairline); }
-/* Quiet header line: where you are in today's queue. Deliberately small and muted, so the phone number stays the focal point. */
-.lead-card .card-position { font-variant-numeric: tabular-nums; }
-.lead-card .phone {
-  font-size: 4rem; font-weight: 500; line-height: 1; letter-spacing: -0.02em;
-  color: var(--fdl-green); text-decoration: none; font-variant-numeric: tabular-nums; word-break: break-word; margin-bottom: 12px;
-}
-.lead-card .phone.missing { color: var(--color-muted); font-weight: 500; font-size: 1.5rem; }
-.lead-card .company { font-family: var(--fdl-font-display); font-size: 1.625rem; font-weight: 600; line-height: 1.15; }
-.lead-card .small { font-size: 0.8125rem; color: var(--color-muted); }
-.lead-card .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.lead-card .row .state-tag { order: -1; }
-.lead-card .why-now { font-size: 0.8125rem; color: var(--color-muted); font-style: italic; margin-top: 6px; }
-.card-actions { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; padding-top: 6px; }
-/* Card expanders read as quiet links under the outcome panel. Direct children only, so the panel's choice chips keep their own style. */
-.card-actions > .chip { background: none; border: 0; border-radius: 0; padding: 4px 0; color: var(--fdl-green); font-weight: 500; }
-.card-actions > .chip::after { content: " →"; }
-.card-actions > .chip:hover { text-decoration: underline; text-underline-offset: 3px; }
-
 .outcome-button { background: var(--fdl-green); color: var(--fdl-ivory); border: 0; border-radius: var(--fdl-radius); padding: 11px 20px; font-size: 0.875rem; font-weight: 500; justify-self: start; }
 .outcome-button:disabled { opacity: 0.6; cursor: default; }
 .outcome-logged { font-size: 0.8125rem; color: var(--fdl-green); font-weight: 500; }
@@ -185,7 +242,6 @@ strong, b, th { font-weight: 500; }
 /* Outcome panel: always visible in the lead view (no modal). One row of options; the chosen one opens its
    fields inline beneath. Used inside the lead card and as its own band in Layer 2. */
 .outcome-panel { display: grid; gap: 14px; }
-.lead-card .outcome-panel { padding-top: 24px; margin-top: 10px; border-top: 1px solid var(--fdl-hairline); }
 .l2 .outcome-panel { margin-top: 20px; }
 .outcome-detail { display: grid; gap: 14px; }
 .outcome-save { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
@@ -199,30 +255,120 @@ strong, b, th { font-weight: 500; }
 .sheet-field { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--color-muted); }
 .sheet-field input, .sheet-field select { font: inherit; padding: 8px 10px; border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius); background: var(--fdl-ivory); color: var(--fdl-charcoal); }
 
-/* Layer 2 lead detail (spec 11.2). Header + contact block pinned; three columns. */
+/* Shared by Guided and the lead page: the pinned top row, the placeholder, the question list, provenance facts. */
 .l2 { padding: 0 48px 64px; max-width: 1440px; margin: 0 auto; }
 .l2 section { scroll-margin-top: var(--l2-top, 220px); }
-.l2 h2, .l2 h3, .l2-role, .l2-contact-name, .l2-facts dd, .l2-script, .l2-alternates li, .l2-email { overflow-wrap: anywhere; } /* long names/titles wrap, never truncate */
+.l2 h2, .l2 h3, .l2-role, .l2-facts dd { overflow-wrap: anywhere; } /* long names/titles wrap, never truncate */
 .l2-top { position: sticky; top: 0; z-index: 5; background: var(--fdl-ivory); padding: 16px 0 14px; border-bottom: 1px solid var(--fdl-hairline); display: grid; gap: 8px; }
 .l2-top-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .l2-top-row > .link-button { color: var(--fdl-green); }
 .l2-company { font-size: 1.75rem; line-height: 1.15; }
 .l2-role { font-size: 0.9375rem; color: var(--color-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.l2-contact { display: flex; gap: 8px 20px; align-items: baseline; flex-wrap: wrap; }
 .l2-phone { font-size: 2rem; font-weight: 500; color: var(--fdl-green); text-decoration: none; font-variant-numeric: tabular-nums; }
 .l2-phone.missing { color: var(--color-muted); font-weight: 500; font-size: 1.25rem; }
-.l2-contact-name { font-weight: 500; }
-.l2-email { font-size: 0.875rem; color: var(--color-muted); }
-.l2-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; padding-top: 20px; align-items: start; }
-.l2-left, .l2-centre, .l2-right { display: grid; gap: 20px; }
-.l2 section { background: var(--fdl-white); border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius-lg); padding: 18px 20px; }
 .l2 h3 { font-size: 1rem; margin-bottom: 10px; }
-.l2-facts { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 0.875rem; }
+.l2 section { background: var(--fdl-white); border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius-lg); padding: 18px 20px; }
+.l2-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 0.8125rem; }
 .l2-facts dt { color: var(--color-muted); }
-.l2-facts dd { margin: 0; }
+.l2-facts dd { margin: 0; overflow-wrap: anywhere; }
+.l2-facts a { color: var(--fdl-green); }
 .l2-placeholder { margin: 0; font-size: 0.8125rem; color: var(--color-muted); border-left: 3px solid var(--fdl-hairline); padding-left: 10px; }
-.l2-script { margin: 0; white-space: pre-wrap; }
-.l2-raw { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.8125rem; }
-.l2-alternates { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.875rem; }
+.l2-questions { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 0.875rem; line-height: 1.5; }
 .l2-flag { margin-top: 14px; display: grid; gap: 6px; justify-items: start; }
 .l2-flagged { margin: 14px 0 0; font-size: 0.8125rem; color: var(--fdl-green); background: var(--fdl-green-tint-08); border-radius: var(--fdl-radius); padding: 8px 10px; overflow-wrap: anywhere; }
+
+/* Lead page = the Intelligence Sheet (spec Format 1, Figure 8.1's order) built from My Day's panels. The lead card is
+   pinned at the top (the phone never scrolls away) and the outcome bar at the bottom (every disposition on screen). */
+.lead-sheet { padding: 0 26px; display: flex; flex-direction: column; gap: 10px; }
+.lead-sheet [id] { scroll-margin-top: var(--l2-top, 260px); }
+.lead-sheet .l2-placeholder { font-size: 0.75rem; }
+.ls-top { position: sticky; top: 0; z-index: 5; background: var(--fdl-ivory); padding: 12px 0 10px; display: grid; gap: 10px; border-bottom: 1px solid var(--fdl-hairline); }
+.ls-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ls-cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.ls-script { display: grid; gap: 8px; }
+.lead-sheet .md-panel .l2-questions { font-size: 0.8125rem; gap: 6px; }
+.ls-role { font-size: 0.875rem; font-weight: 600; }
+.ls-gap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--panel-line); display: grid; gap: 4px; }
+.ls-gap .md-label { color: var(--accent-rust); }
+.ls-close { background: var(--accent-gold); border-radius: var(--fdl-radius); padding: 12px 18px 13px; }
+.ls-close .md-label { color: var(--fdl-charcoal); margin-bottom: 6px; }
+.ls-close p { margin: 0; font-size: 0.875rem; line-height: 1.45; }
+.ls-close .l2-placeholder { border-left-color: color-mix(in srgb, var(--fdl-charcoal) 30%, transparent); color: var(--fdl-charcoal); }
+.md-gatekeeper { overflow-wrap: anywhere; }
+.lead-sheet .md-alternates ul { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); column-gap: 24px; }
+.ls-flags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ls-flags li { background: var(--tag-bg); color: var(--label-green); border-radius: 2px; padding: 3px 8px; font-size: 0.6875rem; font-weight: 500; }
+.ls-flags li.risk { background: color-mix(in srgb, var(--accent-rust) 12%, var(--fdl-white)); color: var(--accent-rust); }
+.ls-provenance { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: start; }
+.ls-provenance .md-panel-head { grid-column: 1 / -1; }
+.ls-provenance .l2-flag, .ls-provenance .l2-flagged { margin-top: 0; }
+.ls-log { position: sticky; bottom: 0; z-index: 5; margin-bottom: 12px; box-shadow: 0 -6px 16px -10px rgb(0 0 0 / 0.25); }
+
+/* Guided Sheet (spec 9.2): a stepped call runner over the same lead. Brand-kit colours only. */
+.guided-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.guided-call { display: flex; align-items: center; gap: 16px; }
+.guided-contact { display: grid; text-align: right; font-weight: 500; font-size: 0.875rem; }
+.guided-cols { display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; gap: 24px; padding-top: 20px; align-items: start; }
+.guided-left, .guided-steps, .guided-right { display: grid; gap: 16px; }
+.guided h3.eyebrow { margin: 0 0 10px; font-size: 0.6875rem; } /* beats .l2 h3 so side headings stay eyebrow-sized */
+.guided-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.guided-step-btn { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; font-size: 0.875rem;
+  background: var(--fdl-white); color: var(--fdl-charcoal); border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius); padding: 10px 12px; cursor: pointer; }
+.guided-step-btn[data-state="live"] { background: var(--fdl-green); border-color: var(--fdl-green); color: var(--fdl-ivory); font-weight: 500; }
+.guided-step-btn[data-state="done"] { opacity: 0.6; }
+.guided-step-btn[data-state="later"] { color: var(--color-muted); }
+.guided-num { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; display: inline-grid; place-items: center; font-size: 0.75rem; }
+.guided-done { margin-left: auto; font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); }
+.l2 section.guided-coach { background: var(--fdl-green-tint-08); border-left: 3px solid var(--fdl-green); }
+.guided-coach p { margin: 0; font-size: 0.875rem; }
+.guided-plant { margin: 0; font-size: 0.8125rem; line-height: 1.5; }
+.guided-lines { display: grid; gap: 14px; }
+.guided-card { transition: opacity 0.15s; }
+.guided-card[data-state="done"] { opacity: 0.5; }
+.guided-card[data-state="later"] { opacity: 0.55; color: var(--color-muted); }
+.l2 section.guided-card[data-state="live"] { background: var(--fdl-green); border-color: var(--fdl-green); color: var(--fdl-ivory); }
+.l2 .guided-eyebrow { display: flex; gap: 12px; font-family: var(--fdl-font-text); font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); color: var(--color-muted); }
+.guided-card[data-state="live"] .guided-eyebrow { color: color-mix(in srgb, var(--fdl-ivory) 80%, transparent); }
+.guided-count { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.guided-words { margin: 0; font-size: 1rem; line-height: 1.5; white-space: pre-wrap; }
+.guided-card[data-state="live"] .guided-words, .guided-card[data-state="live"] .l2-questions { font-size: 1.25rem; line-height: 1.5; } /* 15pt: spec's 15-18pt script */
+.guided-card[data-state="live"] .l2-placeholder { font-size: 1.25rem; color: color-mix(in srgb, var(--fdl-ivory) 85%, transparent); border-left-color: var(--sidebar-line); }
+.guided-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+.guided-next { background: var(--fdl-ivory); color: var(--fdl-green); border: 0; border-radius: var(--fdl-radius); padding: 9px 14px; font-size: 0.875rem; font-weight: 500; cursor: pointer; }
+.guided-secondary { background: transparent; color: var(--fdl-ivory); border: 1px solid var(--sidebar-line); border-radius: var(--fdl-radius); padding: 9px 14px; font-size: 0.875rem; cursor: pointer; }
+.guided-objections { display: grid; gap: 8px; }
+.guided-objection { width: 100%; text-align: left; font: inherit; font-size: 0.875rem; font-weight: 500; background: var(--fdl-ivory); color: var(--fdl-charcoal); border: 1px solid var(--fdl-hairline); border-radius: var(--fdl-radius); padding: 10px 12px; cursor: pointer; }
+.guided-objection:hover, .guided-objection[aria-expanded="true"] { border-color: var(--fdl-green); }
+.guided-objection[aria-expanded="true"] { background: var(--fdl-green-tint-08); }
+.guided-answer { margin-top: 6px; padding: 8px 4px; outline: none; }
+.guided-answer:focus-visible { box-shadow: 0 0 0 2px var(--fdl-green); border-radius: var(--fdl-radius); }
+.guided-outcome { margin-top: 20px; scroll-margin-top: var(--l2-top, 160px); }
+
+/* Job description: the posting's own text in a native dialog, one line per sentence, list items bulleted. */
+.l2-top-actions { display: flex; align-items: center; gap: 12px; }
+.l2-jd-button { background: var(--fdl-white); border: 1px solid var(--fdl-green); color: var(--fdl-green); border-radius: var(--fdl-radius); padding: 5px 14px; font-size: 0.8125rem; font-weight: 500; }
+.l2-jd-button:disabled { border-color: var(--fdl-hairline); color: var(--color-muted); cursor: not-allowed; }
+.jd { margin: auto; width: min(720px, calc(100vw - 32px)); max-height: min(80vh, 760px); padding: 0; border: 1px solid var(--panel-line); border-radius: var(--fdl-radius-lg); color: var(--fdl-charcoal); background: var(--fdl-white); }
+.jd::backdrop { background: color-mix(in srgb, var(--fdl-charcoal) 40%, transparent); }
+.jd[open] { display: flex; flex-direction: column; }
+.jd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 18px 22px 14px; border-bottom: 1px solid var(--panel-line); }
+.jd-head h2 { font-size: 1.25rem; line-height: 1.2; overflow-wrap: anywhere; }
+.jd-head p { margin: 4px 0 0; font-size: 0.75rem; color: var(--color-muted); }
+.jd-head .link-button { color: var(--fdl-green); flex: none; }
+.jd-body { overflow-y: auto; padding: 16px 22px 22px; display: grid; gap: 6px; font-size: 0.875rem; line-height: 1.55; }
+.jd-body p { margin: 0; overflow-wrap: anywhere; }
+.jd-body .jd-item { padding-left: 16px; position: relative; }
+.jd-body .jd-item::before { content: "•"; position: absolute; left: 2px; color: var(--label-green); }
+
+/* Guided: a fixed response, and "Who is this?" under the Open step. */
+.guided-response { margin: 0; font-size: 0.875rem; line-height: 1.5; }
+.guided-who { margin-top: 12px; display: grid; gap: 6px; }
+.l2 .guided-who h4 { margin: 0; }
+.guided-card[data-state="live"] .guided-who .eyebrow { color: color-mix(in srgb, var(--fdl-ivory) 80%, transparent); }
+
+/* Intelligence | Guided: two views of one lead, in both lead pages' headers. */
+.view-toggle { display: inline-flex; border: 1px solid var(--fdl-green); border-radius: var(--fdl-radius); overflow: hidden; }
+.view-toggle a { padding: 5px 14px; font-size: 0.8125rem; font-weight: 500; color: var(--fdl-green); text-decoration: none; }
+.view-toggle a + a { border-left: 1px solid var(--fdl-green); }
+.view-toggle a[aria-current="page"] { background: var(--fdl-green); color: var(--fdl-ivory); }
+.view-toggle a:not([aria-current]):hover { background: var(--fdl-green-tint-08); }

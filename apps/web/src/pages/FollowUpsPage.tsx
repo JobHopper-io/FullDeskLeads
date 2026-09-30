@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { isActive, isOverdue, useLeads } from "../lib/leads";
+import { isActive, isFollowUpDueToday, isOverdue, useLeads } from "../lib/leads";
 import type { QueueItem } from "../lib/types";
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -20,12 +20,11 @@ function Entry({ item }: { item: QueueItem }) {
 // Every active lead with a follow-up set, split at the end of today. Overdue ones sit in Due today, in red.
 export default function FollowUpsPage() {
   const { items } = useLeads();
-  const endOfToday = new Date().setHours(24, 0, 0, 0);
   const all = items!
     .filter((i) => isActive(i) && i.nextActionAt)
     .sort((a, b) => a.nextActionAt!.localeCompare(b.nextActionAt!));
-  const dueToday = all.filter((i) => Date.parse(i.nextActionAt!) < endOfToday);
-  const upcoming = all.filter((i) => Date.parse(i.nextActionAt!) >= endOfToday);
+  const dueToday = all.filter(isFollowUpDueToday);
+  const upcoming = all.filter((i) => !isFollowUpDueToday(i));
 
   return (
     <div className="page follow-ups">

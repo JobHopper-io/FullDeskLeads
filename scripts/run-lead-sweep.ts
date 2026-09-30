@@ -10,5 +10,5 @@ const tally: Record<string, number> = {};
 for (const f of findings) tally[f.outcome] = (tally[f.outcome] ?? 0) + 1;
 console.log(`${dryRun ? "[PLAN, nothing written] " : ""}workable assignments: ${assignmentsChecked} | signals checked: ${signalsChecked} | outcomes: ${JSON.stringify(tally)}`);
 for (const f of findings.filter((f) => f.outcome !== "live")) {
-  console.log(`  ${f.outcome.toUpperCase().padEnd(24)} ${f.company} | ${f.roleTitle.trim()} | signal ${f.hiringSignalId.slice(0, 8)} | ${f.detail ?? ""} | assignments ${dryRun ? "to expire" : "expired"}: ${f.expiredAssignmentIds.length}`);
+  console.log(`  ${f.outcome.toUpperCase().padEnd(24)} ${f.company} | ${f.roleTitle.trim()} | signal ${f.hiringSignalId.slice(0, 8)} | ${f.detail ?? ""} | assignments ${dryRun ? "to expire" : "expired"}: ${f.expiredAssignmentIds.length}, kept (logged call): ${f.protectedAssignmentIds.length}`);
 }

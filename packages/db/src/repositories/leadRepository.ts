@@ -27,6 +27,17 @@ export function leadRepository(db: SupabaseClient) {
       if (error) throw error;
     },
 
+    // Intelligence write (scripts/generate-intelligence.ts --write): only the fields passed are set, so a lead whose
+    // generated text failed QA gets its fixed content and keeps why_now/opening_script exactly as they were.
+    setIntelligence: async (
+      leadId: string,
+      fields: Partial<Pick<LeadRow, "why_now" | "opening_script" | "role_intelligence" | "objections" | "generation_model_version">>,
+    ): Promise<void> => {
+      const { data, error } = await db.from("leads").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", leadId).select("id");
+      if (error) throw error;
+      if (data.length !== 1) throw new Error(`setIntelligence: lead ${leadId} not found`);
+    },
+
     // Day 10 emit: write the finished global lead. why_now/pitch_angle/etc. stay null in the
     // base phase — a hardcoded placeholder stands in for generated intelligence.
     create: async (input: {

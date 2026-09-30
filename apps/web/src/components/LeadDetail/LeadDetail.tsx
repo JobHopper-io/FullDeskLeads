@@ -4,7 +4,11 @@ import { SIGNAL_TYPE, confidenceLabel, formatDate } from "../../lib/provenance";
 import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import StateTag from "../StateTag";
-import FunctionMatchTag from "../FunctionMatchTag";
+import ViewToggle from "../ViewToggle";
+import JobDescription from "../JobDescription";
+import {
+  DiscoveryQuestions, EvidenceStrip, Flags, LeadCard, LightClose, NotTheOne, Opening, Panel, PlantBand, Pushback, ShowYourWork, TheOpening,
+} from "../IntelligenceSheet/IntelligenceSheet";
 
 export type DetailSection = "script" | "role" | "objections";
 
@@ -18,26 +22,19 @@ interface Props {
   onFlagged: (contactId: string, flaggedAt: string) => void;
 }
 
-// Shown wherever intelligence generation hasn't produced anything yet (same idea as the card's why-now line).
-function Placeholder({ children }: { children: string }) {
-  return <p className="l2-placeholder">{children}</p>;
-}
-
-// role_intelligence / objections have no defined shape until generation exists; show it raw rather than invent one.
-const Generated = ({ value }: { value: unknown }) => <pre className="l2-raw">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>;
-
-// Layer 2 (spec 11.2): header + contact block pinned at the top so the phone number is never lost;
-// contact/provenance left, script + role intelligence + alternates centre, objections right.
+// The lead page is the Intelligence Sheet (spec Format 1) in Figure 8.1's order, everything visible at once: the lead
+// card pinned at the top so the phone is never lost, the evidence strip, the plant, then the call (open, show your work,
+// then let him talk, light close) beside the opening, its gap and the pushback; routing, flags and provenance last. The
+// outcome bar is pinned at the bottom so every disposition stays on screen (spec 15). Panels are shared with My Day.
 export default function LeadDetail({ item, section, onBack, onLogged, onFlagged }: Props) {
   const [flagging, setFlagging] = useState(false);
   const [flagError, setFlagError] = useState<string | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
-  const { phone, name, title, email } = item.contact;
 
   // One view, scrolled to whichever section's button opened it — below the pinned header, not under it.
   useEffect(() => {
     const top = topRef.current;
-    if (top) document.documentElement.style.setProperty("--l2-top", `${top.offsetHeight + 16}px`);
+    if (top) document.documentElement.style.setProperty("--l2-top", `${top.offsetHeight + 12}px`);
     if (section) document.getElementById(section)?.scrollIntoView({ block: "start" });
     return () => {
       document.documentElement.style.removeProperty("--l2-top");
@@ -59,78 +56,61 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
   }
 
   return (
-    <div className="l2">
-      <div className="l2-top" ref={topRef}>
+    <div className="lead-sheet">
+      <div className="ls-top" ref={topRef}>
         <div className="l2-top-row">
           <button className="link-button" onClick={onBack}>← Back</button>
+          <div className="l2-top-actions">
+            <JobDescription item={item} className="l2-jd-button" />
+            <ViewToggle id={item.id} current="intelligence" />
+          </div>
         </div>
-        <h2 className="l2-company">{item.company}</h2>
-        <div className="l2-role">
-          {item.roleTitle}
-          {item.location ? ` · ${item.location}` : ""}
-          <FunctionMatchTag item={item} />
-          {item.freshnessBand && <span className={`tag ${item.freshnessBand}`}>{item.freshnessBand}</span>}
-          <StateTag state={item.state} />
+        <LeadCard item={item} tags={<StateTag state={item.state} />} />
+      </div>
+
+      <EvidenceStrip item={item} className="md-stats ls-stats" />
+      <PlantBand item={item} />
+
+      <div className="ls-cols">
+        <div className="md-col">
+          <div id="script" className="ls-script">
+            <Opening item={item} label="Open" />
+            <ShowYourWork item={item} />
+          </div>
+          <Panel id="role" label="Then let him talk">
+            <DiscoveryQuestions item={item} />
+          </Panel>
+          <LightClose item={item} />
         </div>
-        <div className="l2-contact">
-          {phone ? <a className="l2-phone" href={`tel:${phone.replace(/[^\d+]/g, "")}`}>{phone}</a> : <span className="l2-phone missing">No phone on file</span>}
-          <span className="l2-contact-name">{name} · {title}</span>
-          {email && <a className="l2-email" href={`mailto:${email}`}>{email}</a>}
+        <div className="md-col">
+          <TheOpening item={item} />
+          <Pushback id="objections" item={item} />
         </div>
       </div>
 
-      <OutcomePanel item={item} onLogged={onLogged} />
+      <NotTheOne item={item} gatekeeper />
+      <Flags item={item} />
 
-      <div className="l2-cols">
-        <div className="l2-left">
-          <section id="provenance">
-            <h3>Contact &amp; source</h3>
-            <dl className="l2-facts">
-              <dt>Signal</dt><dd>{SIGNAL_TYPE}</dd>
-              <dt>First seen</dt><dd>{formatDate(item.signalFirstSeen)}</dd>
-              <dt>Contact confidence</dt><dd>{confidenceLabel(item.contactConfidence)}</dd>
-              <dt>Phone verified</dt><dd>{item.phoneVerifiedAt ? formatDate(item.phoneVerifiedAt) : "Not verified yet"}</dd>
-            </dl>
-            {item.contactFlaggedAt ? (
-              <p className="l2-flagged" role="status">Reported as bad contact info on {formatDate(item.contactFlaggedAt)}. Thanks, this contact is flagged for your team.</p>
-            ) : (
-              <div className="l2-flag">
-                <button className="chip" onClick={reportBadContact} disabled={flagging}>{flagging ? "Reporting…" : "Report bad contact info"}</button>
-                {flagError && <span className="error">{flagError}</span>}
-              </div>
-            )}
-          </section>
-        </div>
+      <Panel id="provenance" className="ls-provenance" label="Contact & source">
+        <dl className="l2-facts">
+          <dt>Signal</dt><dd>{SIGNAL_TYPE}</dd>
+          <dt>First seen</dt><dd>{formatDate(item.signalFirstSeen)}</dd>
+          <dt>Contact confidence</dt><dd>{confidenceLabel(item.contactConfidence)}</dd>
+          <dt>Phone verified</dt><dd>{item.phoneVerifiedAt ? formatDate(item.phoneVerifiedAt) : "Not verified yet"}</dd>
+          {item.contact.email && <><dt>Email</dt><dd><a href={`mailto:${item.contact.email}`}>{item.contact.email}</a></dd></>}
+        </dl>
+        {item.contactFlaggedAt ? (
+          <p className="l2-flagged" role="status">Reported as bad contact info on {formatDate(item.contactFlaggedAt)}. Thanks, this contact is flagged for your team.</p>
+        ) : (
+          <div className="l2-flag">
+            <button className="chip" onClick={reportBadContact} disabled={flagging}>{flagging ? "Reporting…" : "Report bad contact info"}</button>
+            {flagError && <span className="error">{flagError}</span>}
+          </div>
+        )}
+      </Panel>
 
-        <div className="l2-centre">
-          <section id="script">
-            <h3>Opening script</h3>
-            {item.openingScript ? <p className="l2-script">{item.openingScript}</p> : <Placeholder>Opening script isn't generated yet.</Placeholder>}
-          </section>
-          <section id="role">
-            <h3>Role intelligence</h3>
-            {item.roleIntelligence != null ? <Generated value={item.roleIntelligence} /> : <Placeholder>Role intelligence isn't generated yet.</Placeholder>}
-          </section>
-          <section id="alternates">
-            <h3>Alternate contacts</h3>
-            {item.alternateContacts.length ? (
-              <ul className="l2-alternates">
-                {item.alternateContacts.map((c) => (
-                  <li key={`${c.name}${c.phone}`}><strong>{c.name}</strong> · {c.title} · {c.phone ?? "no phone"}</li>
-                ))}
-              </ul>
-            ) : (
-              <Placeholder>No alternate contacts identified yet.</Placeholder>
-            )}
-          </section>
-        </div>
-
-        <div className="l2-right">
-          <section id="objections">
-            <h3>Objection handling</h3>
-            {item.objections != null ? <Generated value={item.objections} /> : <Placeholder>Objection handling isn't generated yet.</Placeholder>}
-          </section>
-        </div>
+      <div className="md-panel md-log ls-log">
+        <OutcomePanel item={item} onLogged={onLogged} />
       </div>
     </div>
   );

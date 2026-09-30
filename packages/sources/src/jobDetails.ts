@@ -25,26 +25,81 @@ const decodeEntities = (s: string) =>
     if (code !== null) return code <= 0x10ffff ? String.fromCodePoint(code) : m;
     return NAMED_ENTITIES[name.toLowerCase()] ?? m;
   });
-/** Greenhouse's content is HTML-escaped HTML: decode, drop the tags, decode again (&amp;nbsp;). Lever's is plain or raw HTML. */
-const htmlToText = (s: string) => decodeEntities(decodeEntities(s).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+/**
+ * Full stops that don't end a sentence, as a lookbehind to put before a sentence-end pattern: the job description
+ * dialog's abbreviations (etc., Inc., vs., e.g., i.e., U.S.; any case) and US state/DC codes ("Pineville, LA. plant").
+ * The state codes are uppercase only, so "contact me." or "this or." still end a sentence.
+ */
+const US_STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY";
+export const NOT_A_SENTENCE_END = String.raw`(?<!\b(?:[Ee][Tt][Cc]|[Ii][Nn][Cc]|[Vv][Ss]|[Ee]\.[Gg]|[Ii]\.[Ee]|[Uu]\.[Ss]|${US_STATES.split(" ").join("|")})\.)`;
+
+/** In `listItems` text: "•" starts a list item, LIST_END ends a list, so what follows a list is not its last item. */
+export const LIST_END = "¶";
+
+/**
+ * Greenhouse's content is HTML-escaped HTML: decode, drop the tags, decode again (&amp;nbsp;). Lever's is plain or raw
+ * HTML. `listItems` marks each <li> with a "•" and each list's end with LIST_END, so a list survives flattening.
+ */
+const htmlToText = (s: string, listItems = false) => {
+  const html = decodeEntities(s);
+  const marked = listItems ? html.replace(/<li\b[^>]*>/gi, " • ").replace(/<\/(?:ul|ol)>/gi, ` ${LIST_END} `) : html;
+  return decodeEntities(marked.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+};
 
 interface LeverRaw {
+  createdAt?: number;
   descriptionPlain?: string; openingPlain?: string; additionalPlain?: string; salaryDescriptionPlain?: string;
   lists?: { text?: string; content?: string }[];
   salaryRange?: { min?: unknown; max?: unknown; currency?: unknown; interval?: unknown } | null;
 }
 interface GreenhouseRaw {
+  first_published?: string | null;
   content?: string;
   metadata?: { value_type?: string; value?: unknown }[] | null;
 }
 
-export function postingText(source: string, raw: unknown): string {
-  if (source === "greenhouse") return htmlToText((raw as GreenhouseRaw).content ?? "");
+/**
+ * When the source says the posting was first published, from the untouched payload: Greenhouse's first_published (never
+ * its updated_at, which moves on every edit), Lever's createdAt (Lever exposes no separate publish date). Null if absent.
+ */
+export function firstPublishedDate(source: string, raw: unknown): string | null {
+  if (source === "greenhouse") return (raw as GreenhouseRaw).first_published ?? null;
+  if (source === "lever") {
+    const at = (raw as LeverRaw).createdAt;
+    return typeof at === "number" ? new Date(at).toISOString() : null;
+  }
+  return null;
+}
+
+/**
+ * Which company a posting is really for. Crest Industries posts for its operating subsidiaries on one Lever board, so
+ * for Crest it is the posting's Lever department ("DIS-TRAN Steel", "Millennium Galvanizing"...), never a text mention:
+ * a galvanizer's posting says it works "with DIS-TRAN Steel". Only with no department, the opening sentence, and only
+ * when it names the employer ("DIS-TRAN Steel, located in...", "... is looking for", "Come join our team at ..."),
+ * not a partner. Any other board's company is its own employer.
+ * A department that isn't a company ("Transfer Portal (Current Employees Only)", "All Companies") is returned as is,
+ * so it matches no archetype and a lead on it fails attribution rather than being guessed.
+ */
+export function operatingEmployer(companyName: string, raw: unknown): string | null {
+  if (companyName !== "Crest Industries") return companyName;
+  const r = raw as { categories?: { department?: string }; descriptionPlain?: string };
+  const department = r.categories?.department?.trim();
+  if (department) return department;
+  const opening = (r.descriptionPlain ?? "").trim().split(/(?<=[.!?])\s+/)[0] ?? "";
+  const m = opening.match(/^(?:come join our team at\s+)?([A-Z][\w&.' -]*?)(?:,\s+located in\b|\s+is (?:looking|seeking|hiring)\b|\s+has an opening\b|!)/i);
+  return m?.[1]?.trim() || null;
+}
+
+/** `listItems`: keep list items apart ("•"), for callers that split the text into sentences. Off for extraction. */
+export function postingText(source: string, raw: unknown, listItems = false): string {
+  if (source === "greenhouse") return htmlToText((raw as GreenhouseRaw).content ?? "", listItems);
   const r = raw as LeverRaw;
   return htmlToText(
-    [r.descriptionPlain, r.openingPlain, ...(r.lists ?? []).flatMap((l) => [l.text, l.content]), r.additionalPlain, r.salaryDescriptionPlain]
+    // Lever's list content is bare <li>s with no <ul>, so its end is marked here.
+    [r.descriptionPlain, r.openingPlain, ...(r.lists ?? []).flatMap((l) => [l.text, listItems && l.content ? `${l.content}</ul>` : l.content]), r.additionalPlain, r.salaryDescriptionPlain]
       .filter(Boolean)
       .join(" "),
+    listItems,
   );
 }
 
