@@ -7,6 +7,7 @@ import { chromium } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { archetypeForEmployer } from "../../../packages/pipeline/src/intelligence/sources.ts";
 
 const kv = (f) => Object.fromEntries(readFileSync(f, "utf8").split("\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).trim()]));
 const env = kv("../../.env");
@@ -29,6 +30,12 @@ page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 const ACTIVE = new Set(["new", "viewed", "contacted"]);
 const active = (i) => ACTIVE.has(i.state);
 const due = (i) => !i.nextActionAt || Date.parse(i.nextActionAt) <= Date.now();
+const PLANT_FLOOR = /field service|test supervisor|quality control|production (controller|planner)|materials supervisor|site supervisor|manufacturing engineer|maintenance|technician|welder|machinist|fitter|operator/i;
+// My Day ranks by content first (src/lib/intelligence.ts contentTier), then keeps the API's score order.
+const tier = (i) =>
+  i.openingScript ? 2
+  : Array.isArray(i.roleIntelligence?.discoveryQuestions) || Array.isArray(i.objections) || (archetypeForEmployer(i.employer) && PLANT_FLOOR.test(i.roleTitle)) ? 1
+  : 0;
 const endOfToday = new Date().setHours(24, 0, 0, 0);
 const startOfToday = new Date().setHours(0, 0, 0, 0);
 
@@ -56,7 +63,8 @@ check(await page.locator(".account-initials").isVisible() && /seat$/.test(await 
 
 console.log("2. Header");
 const sub = await page.locator(".md-sub").innerText();
-const queue = items.filter((i) => active(i) && due(i));
+const queue = items.filter((i) => active(i) && due(i)).sort((a, b) => tier(b) - tier(a));
+check(queue.every((i, n) => n === 0 || tier(queue[n - 1]) >= tier(i)), `queue ranked by content: ${[0, 1, 2].map((t) => `${queue.filter((i) => tier(i) === t).length} at tier ${t}`).join(", ")}`);
 const doneToday = items.filter((i) => i.lastEvent && Date.parse(i.lastEvent.occurredAt) >= startOfToday && !queue.includes(i)).length;
 const dateLine = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 const total = String(doneToday + queue.length).padStart(2, "0");
@@ -103,8 +111,8 @@ if (top.jobDescription) {
 }
 
 console.log("4. A lead with a plant archetype and alternates (browser-only reorder)");
-const pickIdx = items.findIndex((i) => active(i) && due(i) && i.company === "Industrial Electric Manufacturing" && i.alternateContacts.length);
-const idx = pickIdx >= 0 ? pickIdx : items.findIndex((i) => active(i) && due(i) && i.company === "Industrial Electric Manufacturing");
+const pickIdx = items.findIndex((i) => active(i) && due(i) && tier(i) === 2 && i.company === "Industrial Electric Manufacturing" && i.alternateContacts.length);
+const idx = pickIdx >= 0 ? pickIdx : items.findIndex((i) => active(i) && due(i) && tier(i) === 2 && i.company === "Industrial Electric Manufacturing");
 const pick = items[idx];
 await page.route("**/api/leads", async (route) => {
   const res = await route.fetch(); const body = await res.json();
@@ -124,7 +132,7 @@ const alts = await page.locator(".md-alternates li").allInnerTexts();
 check(alts.length === pick.alternateContacts.length, `alternates: ${alts.length ? alts.map((a) => a.replace(/\n/g, " ")).join(" | ") : "(none on this lead)"}`);
 await page.unroute("**/api/leads");
 
-const floor = items.find((i) => active(i) && due(i) && i.company === "Industrial Electric Manufacturing" && /field service|technician/i.test(i.roleTitle));
+const floor = items.find((i) => active(i) && due(i) && tier(i) === 2 && i.company === "Industrial Electric Manufacturing" && /field service|technician/i.test(i.roleTitle));
 await page.route("**/api/leads", async (route) => {
   const res = await route.fetch(); const body = await res.json();
   const i = body.findIndex((x) => x.id === floor.id); body.unshift(...body.splice(i, 1));

@@ -7,7 +7,7 @@ import OutcomePanel from "../components/OutcomePanel";
 import FunctionMatchTag from "../components/FunctionMatchTag";
 import { Placeholder } from "../components/LeadDetail/LeadDetail";
 import JobDescription from "../components/JobDescription";
-import { equipmentFor, objectionsFor, plantArchetypeOf } from "../lib/intelligence";
+import { contentTier, equipmentFor, objectionsFor, plantArchetypeOf } from "../lib/intelligence";
 
 // Zero-padded to the width of the total, so it reads "07 of 36" and never shifts as it counts up.
 const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width), "0");
@@ -56,7 +56,9 @@ export default function MyDayPage() {
   const { items, worked, logged } = useLeads();
 
   const today = startOfToday();
-  const queue = items!.filter((i) => isActive(i) && isDue(i) && !worked.has(i.id));
+  // A bare lead (placeholders only) never opens the day ahead of one with content; the sort is stable, so the API's
+  // score order still decides within each tier.
+  const queue = items!.filter((i) => isActive(i) && isDue(i) && !worked.has(i.id)).sort((a, b) => contentTier(b) - contentTier(a));
   const current = queue[0];
 
   // "Lead 07 of 36": leads already worked today that have left the queue count as behind the recruiter, the rest of

@@ -43,3 +43,10 @@ export function objectionsFor(item: QueueItem): FixedObjection[] {
   const archetype = plantArchetypeOf(item);
   return archetype ? fixedObjections(archetype, item.roleTitle) : SPEC_SET.filter((o) => !/\{\w+\}/.test(o.response));
 }
+
+/**
+ * How much the lead has to show: 2 = a generated opening script, 1 = only stored questions/objections or equipment
+ * chips, 0 = nothing but placeholders. My Day ranks by this first, then by the API's score order.
+ */
+export const contentTier = (item: QueueItem): number =>
+  item.openingScript ? 2 : discoveryQuestionsOf(item) || isPairs(item.objections) || equipmentFor(item) ? 1 : 0;
