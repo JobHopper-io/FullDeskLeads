@@ -9,6 +9,7 @@ import { postingText } from "../packages/sources/src/jobDetails.js";
 import { applicantsFor, fixedObjections } from "../packages/pipeline/src/intelligence/objections.js";
 import { COMPANY_SOURCES, archetypeForEmployer } from "../packages/pipeline/src/intelligence/sources.js";
 import { fixedQuestions } from "../packages/pipeline/src/intelligence/questions.js";
+import { intelligenceReviewer, readVerdict, reviewGeneration, reviewUser } from "../packages/pipeline/src/intelligence/review.js";
 import { DESCRIPTORS, busyReply, gapLine, whoReply } from "../packages/pipeline/src/intelligence/plant.js";
 
 const inputs = `COMPANY: Industrial Electric Manufacturing
@@ -168,6 +169,35 @@ const gh = { content: "&lt;p&gt;Key Responsibilities:&lt;/p&gt;&lt;ul&gt;&lt;li&
 assert.deepEqual(callSentences(postingText("greenhouse", gh, true)), ["Key Responsibilities:", "Develop schedules", "Utilize ERP"]);
 assert.equal(postingText("greenhouse", gh), "Key Responsibilities: Develop schedules Utilize ERP");
 console.log("ok: description stripping");
+
+// The review gate (review.ts): off unless INTELLIGENCE_REVIEWER names a reviewer; the verdict is read strictly, and a
+// reviewer that can't answer or answers in a shape we can't read fails the lead.
+const setReviewer = (v: string | undefined) => (v === undefined ? delete process.env.INTELLIGENCE_REVIEWER : (process.env.INTELLIGENCE_REVIEWER = v));
+for (const [v, want] of [[undefined, null], ["", null], ["true", null], ["Gemma", null], ["gemma", "gemma"], ["claude", "claude"]] as const) {
+  setReviewer(v); assert.equal(intelligenceReviewer(), want, `INTELLIGENCE_REVIEWER=${JSON.stringify(v)}`);
+}
+setReviewer(undefined);
+const gen: Generation = { why_now: { text: "Open 13 days. It leads daily test operations.", sourceIds: ["D1"], sources: [] }, opening_script: { text: "Who runs the Hi-Pot testing?", sourceIds: ["D2"], sources: [] } };
+const claim = (c: Partial<{ claim: string; about: string; source: string; source_says: string; faithful: boolean }>) => ({ claim: "leads daily test operations", about: "role_duty", source: "D1", source_says: "duty", faithful: true, ...c });
+const age = claim({ claim: "Open 13 days", about: "role_other", source: "posting_line", source_says: "location_or_timing" });
+const ok2 = (why: object[], open: object[] = [claim({ claim: "runs the Hi-Pot testing", source: "D2" })]) => readVerdict(JSON.stringify({ why_now: { claims: why }, opening_script: { claims: open } }), gen)!;
+const rules = (v: ReturnType<typeof ok2>) => v.problems.map((p) => `${p.field}:${p.rule}`);
+assert.ok(ok2([age, claim({})]).fields.why_now.pass && ok2([age, claim({})]).fields.opening_script.pass, "a faithful duty from a duty sentence passes, next to the posting's age");
+assert.deepEqual(rules(ok2([age])), ["why_now:unused_citation", "why_now:no_duty"], "age alone: no duty, and the cited sentence is unused");
+assert.deepEqual(rules(ok2([age, claim({ source: "D1", source_says: "perk" })])), ["why_now:wrong_subject", "why_now:no_duty"], "a duty taken from a perk sentence");
+assert.deepEqual(rules(ok2([claim({ faithful: false })])), ["why_now:invented_fact", "why_now:no_duty"], "an unfaithful duty");
+assert.deepEqual(rules(ok2([claim({}), claim({ claim: "for a new plant", source: "none", about: "company" })])), ["why_now:invented_fact"], "a claim with no source");
+assert.deepEqual(rules(ok2([claim({ source: "[D1]" })], [])), ["opening_script:unreadable", "opening_script:unused_citation"], "no claims in a field; a bracketed ID still matches");
+assert.ok(ok2([claim({ claim: "LEADS daily test operations" })]).problems.length === 0);
+assert.equal(readVerdict("not json", gen), null);
+const pass = { claims: [claim({})] };
+process.env.GEMMA_API_KEY ??= "test";
+const reply = (text: string) => (async () => new Response(JSON.stringify({ status: "completed", model: "Gemma 4 26B A4B", output: [{ content: [{ text }] }] }), { status: 200 })) as unknown as typeof fetch;
+assert.ok(!(await reviewGeneration("gemma", "INPUTS", gen, reply("garbage"))).pass, "unreadable review output twice fails the lead");
+assert.ok((await reviewGeneration("gemma", "INPUTS", gen, reply(JSON.stringify({ why_now: pass, opening_script: { claims: [claim({ source: "D2" })] } })))).pass);
+assert.ok(!(await reviewGeneration("gemma", "INPUTS", gen, failing("500"))).pass, "an unreachable reviewer fails the lead");
+assert.ok(!/D1/.test(reviewUser("INPUTS", gen)), "the reviewer isn't shown what was cited; the code checks citations against its labels");
+console.log("ok: review gate");
 
 // The plant layer (plant.ts): fixed copy, the descriptor traceable to the company's own site, and the gap computed per
 // maintenance posting.

@@ -7,8 +7,9 @@
 //     Writes a hand-checked staging file to the leads, with no model call:
 //       - every lead whose operating employer has an archetype gets the fixed content (never generated, so no QA gate):
 //         role_intelligence = { discoveryQuestions } and objections = the spec set for that archetype;
-//       - only a lead whose generated why_now and opening_script BOTH pass deterministic QA gets them, with
-//         generation_model_version recording the model and review "qa_only" (no reviewer pass has run on it);
+//       - only a lead whose generated why_now and opening_script BOTH pass deterministic QA gets them, and, when
+//         INTELLIGENCE_REVIEWER is set (review.ts), also that reviewer's pass, recorded in the staging file; its
+//         generation_model_version records the model and the review ("review:gemma", or "review:qa_only" when off);
 //       - anything else keeps its current value (the app's placeholder), untouched.
 // A lead is in scope by its posting's operating employer (operatingEmployer; a Crest posting's Lever department), never
 // by the parent company's name. A lead whose employer has no archetype (archetypeForEmployer) gets nothing.
@@ -17,12 +18,22 @@ import { createServiceClient, leadRepository, type HiringSignalRow } from "@fdl/
 import { loadEnv } from "@fdl/shared";
 import { MODEL } from "../packages/pipeline/src/intelligence/courier.js";
 import { generateIntelligence, type GenerationResult, type SourceKey } from "../packages/pipeline/src/intelligence/generate.js";
-import { reviewGeneration, type ReviewResult } from "../packages/pipeline/src/intelligence/review.js";
+import { intelligenceReviewer, reviewGeneration, type ReviewResult } from "../packages/pipeline/src/intelligence/review.js";
 import { COMPANY_SOURCES } from "../packages/pipeline/src/intelligence/sources.js";
 import { operatingEmployer, postingText } from "../packages/sources/src/jobDetails.js";
 
-/** Recorded with every generated field written; a later reviewer pass replaces "qa_only" for the leads it clears. */
-export const QA_ONLY = `courier:${MODEL}; review:qa_only`;
+const reviewer = intelligenceReviewer();
+/** Recorded with every generated field written: which gates it passed. qa_only = deterministic QA, no reviewer. */
+const MARKER = `courier:${MODEL}; review:${reviewer ?? "qa_only"}`;
+const qaPassed = (r: Result) => r.ok && r.verification!.pass && r.generation!.why_now.text !== null && r.generation!.opening_script.text !== null;
+/** Both gates: the deterministic QA and, when a reviewer is set, that same reviewer's pass. */
+const cleared = (r: Result) => qaPassed(r) && (!reviewer || (r.review?.reviewer === reviewer && r.review.pass));
+const logReview = (r: Result) => {
+  const v = r.review;
+  if (!v) return;
+  console.log(`  review:${v.reviewer} ${v.pass ? "PASS" : "FAIL"}  ${r.roleTitle}${v.ok ? "" : ` | ${v.error}`}`);
+  if (v.ok) for (const p of v.problems) console.log(`      ${p.field} ${p.rule}${p.quote ? ` "${p.quote}"${p.quoteFound ? "" : " (not in the text)"}` : ""}: ${p.reason}`);
+};
 
 type Result = GenerationResult & { leadId: string; company: string; employer: string | null; signalStatus: string; review: ReviewResult | null };
 interface Staging { generatedAt: string; handCheck: string[]; results: Result[]; noArchetype: { leadId: string; company: string; employer: string | null; roleTitle: string }[] }
@@ -46,20 +57,21 @@ if (writeFrom) {
   const leads = leadRepository(db);
   let generated = 0;
   for (const r of staging.results) {
-    const passed = r.ok && r.verification!.pass && r.generation!.why_now.text !== null && r.generation!.opening_script.text !== null && !hold.has(r.hiringSignalId);
+    const passed = cleared(r) && !hold.has(r.hiringSignalId);
     await leads.setIntelligence(r.leadId, {
       role_intelligence: { discoveryQuestions: r.discoveryQuestions.questions },
       objections: r.objections.pairs,
-      ...(passed && { why_now: r.generation!.why_now.text, opening_script: r.generation!.opening_script.text, generation_model_version: QA_ONLY }),
+      ...(passed && { why_now: r.generation!.why_now.text, opening_script: r.generation!.opening_script.text, generation_model_version: MARKER }),
     });
     if (passed) generated++;
   }
-  console.log(`written: fixed content on ${staging.results.length} lead(s); generated why_now + opening_script (${QA_ONLY}) on ${generated}; held by hand check: ${hold.size}; untouched: ${staging.noArchetype.length} with no archetype`);
+  console.log(`written: fixed content on ${staging.results.length} lead(s); generated why_now + opening_script (${MARKER}) on ${generated}; QA passes the reviewer failed: ${staging.results.filter((r) => qaPassed(r) && !cleared(r)).length}; held by hand check: ${hold.size}; untouched: ${staging.noArchetype.length} with no archetype`);
   process.exit(0);
 }
 
 const out = arg("out");
 if (!out) throw new Error("usage: generate-intelligence.ts --out=<staging.json> [--ids=...] | --write=<staging.json>");
+
 const ids = arg("ids")?.split(",").filter(Boolean);
 
 type Row = { id: string; hiring_signals: HiringSignalRow & { companies: { name: string }; raw_signals: { raw_payload: { rawPayload: unknown } } | null } };
@@ -99,34 +111,35 @@ const HAND_CHECK = [
 ];
 
 // Sequential on purpose: Courier is shared with Job-Hopper and has no known rate limit.
-// The review pass (report-only) runs only when a stronger model's key is set; otherwise the result says it didn't run.
+// The review pass runs only on a QA pass, and only when INTELLIGENCE_REVIEWER is set; it's a separate call either way.
 const results: Result[] = [];
 for (const [row, key, employer] of inScope) {
   const s = row.hiring_signals;
   const description = s.raw_signals ? postingText(s.source, s.raw_signals.raw_payload.rawPayload, true) : null;
   const g = await generateIntelligence(s, key, description, employer);
-  const review = g.generation ? await reviewGeneration(g.inputs, g.generation) : null;
-  const r: Result = { ...g, leadId: row.id, company: s.companies.name, employer, signalStatus: s.status, review };
+  const r: Result = { ...g, leadId: row.id, company: s.companies.name, employer, signalStatus: s.status, review: null };
+  if (reviewer && qaPassed(r)) r.review = await reviewGeneration(reviewer, r.inputs, r.generation!);
   results.push(r);
   const failed = r.verification ? Object.entries(r.verification.fields).filter(([, f]) => f.status === "fail").map(([n]) => n) : [];
   const nulls = r.verification ? Object.entries(r.verification.fields).filter(([, f]) => f.status === "null").map(([n]) => n) : [];
   console.log(`${r.ok ? (r.verification!.pass && !nulls.length ? "PASS" : nulls.length && !failed.length ? "NULL" : "QA FAIL") : "GEN FAIL"}  ${employer} | ${r.roleTitle} | signal ${s.status} | ${(r.latencyMs / 1000).toFixed(1)}s${r.error ? ` | ${r.error}` : ""}${failed.length ? ` | failing: ${failed.join(", ")}` : ""}${nulls.length ? ` | null: ${nulls.join(", ")}` : ""}`);
-  if (creditLimited(r.error)) { stopForCredit(results.length, inScope.length, "lead(s)"); break; }
+  logReview(r);
+  if (creditLimited(r.error) || creditLimited(r.review?.ok === false ? r.review.error : null)) { stopForCredit(results.length, inScope.length, "lead(s)"); break; }
 }
 
-const passes = (r: Result) => r.ok && r.verification!.pass && Object.values(r.verification!.fields).every((f) => f.status === "pass");
 const byEmployer: Record<string, { leads: number; genFail: number; qaPass: number; qaFail: number }> = {};
 const byField: Record<string, Record<string, number>> = {};
 for (const r of results) {
   const e = (byEmployer[r.employer ?? "?"] ??= { leads: 0, genFail: 0, qaPass: 0, qaFail: 0 });
   e.leads++;
   if (!r.ok) e.genFail++;
-  else if (passes(r)) e.qaPass++;
+  else if (qaPassed(r)) e.qaPass++;
   else e.qaFail++;
   if (r.ok) for (const [n, f] of Object.entries(r.verification!.fields)) (byField[n] ??= {})[f.status] = (byField[n][f.status] ?? 0) + 1;
 }
 console.log(`\nby employer: ${JSON.stringify(byEmployer, null, 1)}`);
 console.log(`by field (generated leads): ${JSON.stringify(byField)}`);
+if (reviewer) console.log(`review:${reviewer}: ${results.filter(cleared).length} of ${results.filter(qaPassed).length} QA passes clear both gates`);
 console.log(`no archetype (fixed content and generation both skipped): ${JSON.stringify(Object.entries(noArchetype.reduce<Record<string, number>>((t, n) => ((t[`${n.company} / ${n.employer}`] = (t[`${n.company} / ${n.employer}`] ?? 0) + 1), t), {})))}`);
 writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), handCheck: HAND_CHECK, results, noArchetype } satisfies Staging, null, 2));
 console.log(`\nstaging output (no database writes): ${out}\nhand-check list:\n${HAND_CHECK.map((h) => `  - ${h}`).join("\n")}`);
