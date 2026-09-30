@@ -103,6 +103,7 @@ strong, b, th { font-weight: 500; }
 /* The plant: a green rule on the left marks the one band that is about the place, not the call. */
 .md-plant { border-left: 3px solid var(--fdl-green); display: grid; gap: 10px; }
 .md-plant .md-panel-head { margin-bottom: 0; }
+.md-descriptor { margin: 0; font-size: 0.875rem; font-weight: 600; line-height: 1.45; }
 .md-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .md-chips li { background: var(--chip-bg); border-radius: 3px; padding: 5px 8px; font-size: 0.6875rem; }
 .md-chips li::first-letter { text-transform: uppercase; }
@@ -143,6 +144,8 @@ strong, b, th { font-weight: 500; }
 .md-stat .md-dash { color: var(--fdl-silver); font-weight: 500; }
 .md-stat-label { font-size: 0.625rem; color: var(--color-muted); overflow-wrap: anywhere; }
 .md-gap .md-label { color: var(--accent-rust); }
+.md-gap-line { margin: 0; font-size: 0.75rem; line-height: 1.5; }
+.md-gap-line + .md-gap-line { margin-top: 8px; }
 .md-objections { margin: 0; display: grid; gap: 12px; }
 .md-objections dt { font-weight: 500; font-size: 0.75rem; }
 .md-objections dd { margin: 2px 0 0; font-size: 0.75rem; line-height: 1.5; color: color-mix(in srgb, var(--fdl-charcoal) 85%, var(--fdl-white)); }
@@ -275,6 +278,7 @@ strong, b, th { font-weight: 500; }
 .l2-facts dd { margin: 0; }
 .l2-placeholder { margin: 0; font-size: 0.8125rem; color: var(--color-muted); border-left: 3px solid var(--fdl-hairline); padding-left: 10px; }
 .l2-script { margin: 0; white-space: pre-wrap; }
+.l2-close { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--fdl-hairline); }
 .l2-questions { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 0.875rem; line-height: 1.5; }
 .l2-objections { margin: 0; display: grid; gap: 14px; font-size: 0.875rem; }
 .l2-objections dt { font-weight: 500; }
@@ -300,6 +304,8 @@ strong, b, th { font-weight: 500; }
 .guided-done { margin-left: auto; font-size: 0.6875rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow); }
 .l2 section.guided-coach { background: var(--fdl-green-tint-08); border-left: 3px solid var(--fdl-green); }
 .guided-coach p { margin: 0; font-size: 0.875rem; }
+.guided-plant { margin: 0; font-size: 0.8125rem; line-height: 1.5; }
+.guided-lines { display: grid; gap: 14px; }
 .guided-card { transition: opacity 0.15s; }
 .guided-card[data-state="done"] { opacity: 0.5; }
 .guided-card[data-state="later"] { opacity: 0.55; color: var(--color-muted); }

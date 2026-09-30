@@ -7,8 +7,9 @@ import { callSentences, generateIntelligence, stripForCall, titleForCall } from 
 import { operatingEmployer } from "../packages/sources/src/jobDetails.js";
 import { postingText } from "../packages/sources/src/jobDetails.js";
 import { applicantsFor, fixedObjections } from "../packages/pipeline/src/intelligence/objections.js";
-import { archetypeForEmployer } from "../packages/pipeline/src/intelligence/sources.js";
+import { COMPANY_SOURCES, archetypeForEmployer } from "../packages/pipeline/src/intelligence/sources.js";
 import { fixedQuestions } from "../packages/pipeline/src/intelligence/questions.js";
+import { DESCRIPTORS, busyReply, gapLine, whoReply } from "../packages/pipeline/src/intelligence/plant.js";
 
 const inputs = `COMPANY: Industrial Electric Manufacturing
 TYPICAL EQUIPMENT: [T1] laser cutters; shears; turret punches; copper/bus bar processing; powder coat line; electrical test equipment
@@ -167,3 +168,22 @@ const gh = { content: "&lt;p&gt;Key Responsibilities:&lt;/p&gt;&lt;ul&gt;&lt;li&
 assert.deepEqual(callSentences(postingText("greenhouse", gh, true)), ["Key Responsibilities:", "Develop schedules", "Utilize ERP"]);
 assert.equal(postingText("greenhouse", gh), "Key Responsibilities: Develop schedules Utilize ERP");
 console.log("ok: description stripping");
+
+// The plant layer (plant.ts): fixed copy, the descriptor traceable to the company's own site, and the gap computed per
+// maintenance posting.
+{
+  const iem = COMPANY_SOURCES.INDUSTRIAL_ELECTRIC.facts.join(" ");
+  for (const f of DESCRIPTORS["Industrial Electric Manufacturing"].from) assert.ok(iem.includes(f), `descriptor source is on the site: ${f}`);
+  assert.ok(!/fremont|san antonio|texas|california/i.test(DESCRIPTORS["Industrial Electric Manufacturing"].text), "the descriptor names no city");
+  assert.equal(gapLine("SWITCHGEAR_ASSEMBLY", "Maintenance Technician", "Troubleshoot PLCs, welding repairs and hydraulic presses."),
+    "Posting names welding. It never mentions the sheet-metal line (lasers, shears, turret punches), copper bus processing, the powder coat line, electrical test equipment or building systems.");
+  assert.equal(gapLine("SWITCHGEAR_ASSEMBLY", "Maintenance Tech", "HVAC, copper bus bar, turret punch, powder coat, welding, Hi-Pot"), null, "a posting naming everything has no gap");
+  assert.equal(gapLine("SWITCHGEAR_ASSEMBLY", "Test Supervisor", "Hi-Pot and Megger"), null, "the gap is defined for maintenance hires only");
+  assert.equal(gapLine("STEEL_POLE_STRUCTURE_FAB", "Maintenance Technician", "cranes"), null, "an archetype with no plant layer has no gap");
+  assert.match(gapLine("SWITCHGEAR_ASSEMBLY", "Maintenance Technician", "Keep things running.")!, /^Posting never mentions /);
+  assert.equal(busyReply(null), "No problem — one question and I'll let you go. Is this one still open?");
+  assert.equal(busyReply(3), "No problem — one question and I'll let you go. Are those still open?");
+  assert.equal(whoReply("Buyer"), "Recruiter — manufacturing only. Not a temp shop.");
+  assert.equal(whoReply("Maintenance Technician"), "Recruiter — maintenance only, manufacturing only. Not a temp shop.");
+  console.log("ok: plant layer");
+}

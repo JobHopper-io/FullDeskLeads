@@ -3,6 +3,7 @@ import type { QueueItem } from "./types";
 // what generation would be given, never a second copy of it.
 import { ARCHETYPES, archetypeForEmployer } from "../../../../packages/pipeline/src/intelligence/sources";
 import { SPEC_SET, fixedObjections, type FixedObjection } from "../../../../packages/pipeline/src/intelligence/objections";
+import { DESCRIPTORS, LIGHT_CLOSE, LIGHT_CLOSE_GUIDED, PLANT_LAYER, busyReply, gapLine, whoReply } from "../../../../packages/pipeline/src/intelligence/plant";
 
 type Archetype = keyof typeof ARCHETYPES;
 
@@ -42,6 +43,28 @@ export function objectionsFor(item: QueueItem): FixedObjection[] {
   if (isPairs(item.objections)) return item.objections;
   const archetype = plantArchetypeOf(item);
   return archetype ? fixedObjections(archetype, item.roleTitle) : SPEC_SET.filter((o) => !/\{\w+\}/.test(o.response));
+}
+
+/**
+ * The fixed plant layer (plant.ts) for the lead's operating employer's archetype, or null with no archetype (every
+ * field then stays a placeholder). Plant-level lines (why-hard, show-your-work) only for a plant-floor role, as with
+ * the equipment chips; the gap only for a maintenance posting; a field the archetype has no copy for is null.
+ */
+export function plantLayerFor(item: QueueItem) {
+  const archetype = plantArchetypeOf(item);
+  if (!archetype) return null;
+  const layer = PLANT_LAYER[archetype];
+  const floor = PLANT_FLOOR.test(item.roleTitle);
+  return {
+    descriptor: (item.employer && DESCRIPTORS[item.employer]?.text) || null,
+    whyHard: (floor && layer?.whyHard) || null,
+    showYourWork: (floor && layer?.showYourWork) || null,
+    gap: gapLine(archetype, item.roleTitle, item.jobDescription?.map((l) => l.text).join(" ") ?? ""),
+    lightClose: LIGHT_CLOSE,
+    lightCloseGuided: LIGHT_CLOSE_GUIDED,
+    busy: busyReply(item.openingCount),
+    who: whoReply(item.roleTitle),
+  };
 }
 
 /**

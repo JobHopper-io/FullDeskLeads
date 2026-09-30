@@ -7,7 +7,7 @@ import OutcomePanel from "../components/OutcomePanel";
 import FunctionMatchTag from "../components/FunctionMatchTag";
 import { Placeholder } from "../components/LeadDetail/LeadDetail";
 import JobDescription from "../components/JobDescription";
-import { contentTier, equipmentFor, objectionsFor, plantArchetypeOf } from "../lib/intelligence";
+import { contentTier, equipmentFor, objectionsFor, plantArchetypeOf, plantLayerFor } from "../lib/intelligence";
 
 // Zero-padded to the width of the total, so it reads "07 of 36" and never shifts as it counts up.
 const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width), "0");
@@ -96,6 +96,7 @@ export default function MyDayPage() {
 function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeof OutcomePanel>[0]["onLogged"] }) {
   const { phone, name, title } = item.contact;
   const equipment = equipmentFor(item);
+  const plant = plantLayerFor(item);
   const days = item.postedDate ? daysSince(item.postedDate) : null;
   const seats = [item.openingCount !== null && plural(item.openingCount, "seat"), item.shift].filter(Boolean).join(", ");
   const detail = (section: string) => `/leads/${item.id}?section=${section}`;
@@ -132,7 +133,7 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
         </article>
 
         <Panel className="md-plant" label="The plant" aside={<span className="md-label-aside">What you know before he says a word</span>}>
-          <Placeholder>Plant descriptor isn't generated yet.</Placeholder>
+          {plant?.descriptor ? <p className="md-descriptor">{plant.descriptor}</p> : <Placeholder>Plant descriptor isn't generated yet.</Placeholder>}
           {equipment ? (
             <ul className="md-chips" aria-label="Typical equipment">
               {equipment.map((e) => <li key={e}>{e}</li>)}
@@ -141,7 +142,8 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
             <Placeholder>No plant archetype on file for this company yet, so no equipment set.</Placeholder>
           )}
           <div className="md-hard">
-            <strong>Why this one is hard:</strong> <Placeholder>Why this one is hard isn't generated yet.</Placeholder>
+            <strong>Why this one is hard:</strong>{" "}
+            {plant?.whyHard ?? <Placeholder>{plant ? "Plant-floor roles only; this one isn't." : "Why this one is hard isn't generated yet."}</Placeholder>}
           </div>
         </Panel>
 
@@ -150,8 +152,12 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
           {item.openingScript ? <p>{item.openingScript}</p> : <Placeholder>Opening script isn't generated yet.</Placeholder>}
         </section>
 
-        <Panel className="md-floor grow" label="Show you know the floor — ask, don't tell">
-          <Placeholder>Show-your-work questions aren't generated yet.</Placeholder>
+        <Panel className="md-floor grow" label="Show you know the floor — ask, don't tell" aside={plant?.showYourWork && <span className="md-label-aside">Pick one</span>}>
+          {plant?.showYourWork ? (
+            plant.showYourWork.map((q) => <blockquote key={q}>“{q}”</blockquote>)
+          ) : (
+            <Placeholder>{plant ? "Show-your-work questions are for plant-floor roles; this one isn't." : "Show-your-work questions aren't generated yet."}</Placeholder>
+          )}
           <div className="md-buttons">
             <Link className="md-button" to={detail("role")}>Discovery questions</Link>
             <Link className="md-button" to={detail("script")}>Full script</Link>
@@ -177,7 +183,14 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
         </div>
 
         <Panel className="md-gap" label="The gap">
-          <Placeholder>Gap analysis isn't generated yet.</Placeholder>
+          {plant?.gap ? (
+            <>
+              <p className="md-gap-line">{plant.gap}</p>
+              <p className="md-gap-line">That gap is your opening question.</p>
+            </>
+          ) : (
+            <Placeholder>{plant ? "No gap line: it compares a maintenance posting with what the plant runs, and this isn't one." : "Gap analysis isn't generated yet."}</Placeholder>
+          )}
         </Panel>
 
         <Panel className="md-pushback grow" label="If he pushes back">

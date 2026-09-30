@@ -7,7 +7,7 @@ import StateTag from "../StateTag";
 import FunctionMatchTag from "../FunctionMatchTag";
 import ViewToggle from "../ViewToggle";
 import JobDescription from "../JobDescription";
-import { discoveryQuestionsOf, objectionsFor } from "../../lib/intelligence";
+import { discoveryQuestionsOf, objectionsFor, plantLayerFor } from "../../lib/intelligence";
 
 export type DetailSection = "script" | "role" | "objections";
 
@@ -43,6 +43,7 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
   const [flagError, setFlagError] = useState<string | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const { phone, name, title, email } = item.contact;
+  const close = plantLayerFor(item)?.lightClose;
 
   // One view, scrolled to whichever section's button opened it — below the pinned header, not under it.
   useEffect(() => {
@@ -120,6 +121,7 @@ export default function LeadDetail({ item, section, onBack, onLogged, onFlagged 
           <section id="script">
             <h3>Opening script</h3>
             {item.openingScript ? <p className="l2-script">{item.openingScript}</p> : <Placeholder>Opening script isn't generated yet.</Placeholder>}
+            {close && <p className="l2-close"><strong>Light close:</strong> “{close}”</p>}
           </section>
           <section id="role">
             <h3>Discovery questions</h3>

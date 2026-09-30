@@ -3,7 +3,7 @@ import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import ViewToggle from "../ViewToggle";
 import { DiscoveryQuestions, Placeholder } from "../LeadDetail/LeadDetail";
-import { objectionsFor } from "../../lib/intelligence";
+import { objectionsFor, plantLayerFor } from "../../lib/intelligence";
 
 interface Props {
   item: QueueItem;
@@ -23,7 +23,14 @@ const STEPS: { label: string; cue: string; words: (item: QueueItem) => ReactNode
   {
     label: "Show your work",
     cue: "Pick one, ask it as a question",
-    words: () => <Placeholder>Show-your-work questions aren't generated yet.</Placeholder>,
+    words: (i) => {
+      const plant = plantLayerFor(i);
+      return plant?.showYourWork ? (
+        <div className="guided-lines">{plant.showYourWork.map((q) => <p key={q} className="guided-words">“{q}”</p>)}</div>
+      ) : (
+        <Placeholder>{plant ? "Show-your-work questions are for plant-floor roles; this one isn't." : "Show-your-work questions aren't generated yet."}</Placeholder>
+      );
+    },
   },
   {
     label: "Stop and ask",
@@ -33,21 +40,28 @@ const STEPS: { label: string; cue: string; words: (item: QueueItem) => ReactNode
   {
     label: "Light close",
     cue: "Don't leave without asking",
-    words: () => <Placeholder>The close isn't generated yet.</Placeholder>,
+    words: (i) => {
+      const close = plantLayerFor(i)?.lightCloseGuided;
+      return close ? <p className="guided-words">“{close}”</p> : <Placeholder>The close isn't generated yet.</Placeholder>;
+    },
   },
 ];
 
 interface Tap { key: string; label: string; answer: ReactNode }
 
-// Right rail (spec Figure 9.2): the fixed objection set from objections.ts, then "I'm busy", which has no reviewed
-// response yet. "Email me something." stays on the Intelligence view only. "Who is this?" sits under the Open step.
+// A reply from plant.ts (fixed copy), or the placeholder for a lead with no archetype.
+const reply = (words: string | undefined, what: string) =>
+  words ? <p className="guided-response">“{words}”</p> : <Placeholder>{`The response to “${what}” isn't generated yet.`}</Placeholder>;
+
+// Right rail (spec Figure 9.2): the fixed objection set from objections.ts, then "I'm busy" (plant.ts). "Email me
+// something." stays on the Intelligence view only. "Who is this?" sits under the Open step.
 const pushbacksFor = (item: QueueItem): Tap[] => [
   ...objectionsFor(item)
     .filter((o) => o.objection !== "Email me something.")
     .map((o, i) => ({ key: `o${i}`, label: `“${o.objection}”`, answer: <p className="guided-response">“{o.response}”</p> })),
-  { key: "busy", label: "“I'm busy.”", answer: <Placeholder>The response to “I'm busy” isn't generated yet.</Placeholder> },
+  { key: "busy", label: "“I'm busy.”", answer: reply(plantLayerFor(item)?.busy, "I'm busy") },
 ];
-const WHO: Tap = { key: "who", label: "“Who is this?”", answer: <Placeholder>The response to “Who is this?” isn't generated yet.</Placeholder> };
+const whoFor = (item: QueueItem): Tap => ({ key: "who", label: "“Who is this?”", answer: reply(plantLayerFor(item)?.who, "Who is this?") });
 
 const stateOf = (index: number, live: number): StepState => (index < live ? "done" : index === live ? "live" : "later");
 
@@ -62,6 +76,7 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
   const outcomeRef = useRef<HTMLDivElement>(null);
   const { phone, name, title } = item.contact;
   const pushbacks = pushbacksFor(item);
+  const plant = plantLayerFor(item);
 
   const goTo = (index: number) => {
     setLive(index);
@@ -135,7 +150,7 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
           </nav>
           <section>
             <h3 className="eyebrow">The plant, in one line</h3>
-            <Placeholder>Plant descriptor isn't generated yet.</Placeholder>
+            {plant?.descriptor ? <p className="guided-plant">{plant.descriptor}</p> : <Placeholder>Plant descriptor isn't generated yet.</Placeholder>}
           </section>
           <section className="guided-coach">
             <h3 className="eyebrow">Coach note</h3>
@@ -153,7 +168,7 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
                   {state === "live" && <span className="guided-count">Step {i + 1} of {STEPS.length}</span>}
                 </h3>
                 {step.words(item)}
-                {i === 0 && <div className="guided-who"><h4 className="eyebrow">If they ask</h4>{tap(WHO)}</div>}
+                {i === 0 && <div className="guided-who"><h4 className="eyebrow">If they ask</h4>{tap(whoFor(item))}</div>}
                 {state === "live" && (
                   <div className="guided-actions">
                     {i < STEPS.length - 1 ? (
@@ -179,7 +194,11 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
           </section>
           <section>
             <h3 className="eyebrow">The gap</h3>
-            <Placeholder>Gap analysis isn't generated yet.</Placeholder>
+            {plant?.gap ? (
+              <p className="guided-plant">{plant.gap}</p>
+            ) : (
+              <Placeholder>{plant ? "No gap line: it compares a maintenance posting with what the plant runs, and this isn't one." : "Gap analysis isn't generated yet."}</Placeholder>
+            )}
           </section>
         </div>
       </div>
