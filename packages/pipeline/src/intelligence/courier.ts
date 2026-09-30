@@ -1,7 +1,7 @@
 // Courier: the shared, self-hosted Gemma instance (also used by Job-Hopper) behind an ngrok tunnel. No rate limits or
 // uptime guarantee are known, so every call is bounded and a failure is a value, never an exception.
 const COURIER_URL = "https://uce.ngrok.app/v1/responses";
-const MODEL = "Gemma 4 26B A4B";
+export const MODEL = "Gemma 4 26B A4B";
 /** Measured 5.9s and 7.3s for a ~400-token generation (2026-09-28); ~3x headroom for a busy shared box. */
 const TIMEOUT_MS = 20_000;
 const ATTEMPTS = 2; // the call plus one retry, then give up on this lead
