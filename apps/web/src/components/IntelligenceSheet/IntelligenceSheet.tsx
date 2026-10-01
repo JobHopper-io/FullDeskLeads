@@ -129,7 +129,9 @@ export function PlantBand({ item }: { item: QueueItem }) {
       )}
       <div className="md-hard">
         <strong>Why this one is hard:</strong>{" "}
-        {plant?.whyHard ?? <Placeholder>{plant ? "Plant-floor roles only; this one isn't." : "Why this one is hard isn't generated yet."}</Placeholder>}
+        {plant?.whyHard ?? (
+          <Placeholder>{plantArchetypeOf(item) ? "Plant-floor roles only; this one isn't." : "No plant archetype on file for this company yet."}</Placeholder>
+        )}
       </div>
     </Panel>
   );
@@ -152,7 +154,9 @@ export function ShowYourWork({ item, className = "", children }: { item: QueueIt
       {plant?.showYourWork ? (
         plant.showYourWork.map((q) => <blockquote key={q}>“{q}”</blockquote>)
       ) : (
-        <Placeholder>{plant ? "Show-your-work questions are for plant-floor roles; this one isn't." : "Show-your-work questions aren't generated yet."}</Placeholder>
+        <Placeholder>
+          {plantArchetypeOf(item) ? "Show-your-work questions are for plant-floor roles; this one isn't." : "No plant archetype on file for this company yet."}
+        </Placeholder>
       )}
       {children}
     </Panel>
@@ -168,7 +172,11 @@ export function GapText({ item }: { item: QueueItem }) {
       <p className="md-gap-line">That gap is your opening question.</p>
     </>
   ) : (
-    <Placeholder>{plant ? "No gap line: it compares a maintenance posting with what the plant runs, and this isn't one." : "Gap analysis isn't generated yet."}</Placeholder>
+    <Placeholder>
+      {plantArchetypeOf(item)
+        ? "No gap line: it compares a maintenance posting with what the plant runs, and this isn't one."
+        : "No plant archetype on file for this company yet."}
+    </Placeholder>
   );
 }
 

@@ -13,12 +13,46 @@
 // the roles that are a different function despite an industry word in the title are decided first.
 
 export type RoleFamily =
-  | "sales" | "finance" | "production" | "maintenance" | "warehouse" | "fleet" | "construction" | "machining" | "engineering" | "procurement";
+  | "sales" | "finance" | "production" | "maintenance" | "warehouse" | "fleet" | "construction" | "machining" | "engineering" | "procurement" | "hr";
 
 const has = (re: RegExp, title: string) => re.test(title);
 
+/**
+ * Greenhouse/Lever's own department tag, when the board set one: a far cleaner signal than the title regex below,
+ * since it comes from the company's own org chart rather than guessing from words in a title. Primary signal; a
+ * department that matches one of these buckets is authoritative and the title is never consulted — this is what
+ * stops "Director, People Partners - Product, Design & Engineering" (department "People") from being caught by the
+ * title's own "Engineering" substring, and "Production Designer" (department "Design") from being caught by
+ * "production". A department this doesn't recognize (missing, blank, or one of a company's own numbered/internal
+ * codes, e.g. "8611 Security Analytics") falls through to the title regex unchanged, same as before this existed.
+ */
+const DEPARTMENT_FAMILY: [RegExp, RoleFamily][] = [
+  [/\b(people|human resources|\bhr\b|recruiting|talent)\b/i, "hr"],
+  [/\b(engineering|software engineering|devops|information technology|\bit\b)\b/i, "engineering"],
+  [/\b(sales|business development|account executives?|revenue)\b/i, "sales"],
+  [/\b(finance|accounting)\b/i, "finance"],
+  [/\b(procurement|purchasing|supply chain)\b/i, "procurement"],
+  [/\b(warehouse|logistics|distribution)\b/i, "warehouse"],
+  [/\b(maintenance|facilities)\b/i, "maintenance"],
+  [/\bconstruction\b/i, "construction"],
+  [/\b(machining|manufactur\w*|production)\b/i, "production"],
+  [/\b(fleet|transportation)\b/i, "fleet"],
+];
+/** Departments that confidently mean "no trade family" (generic fallback) — stops at department, title never consulted. */
+const DEPARTMENT_NONE = /\b(marketing|product( management)?|design|legal|customer (success|experience|care|support)|operations|community)\b/i;
+
+function familyFromDepartment(department: string): RoleFamily | null | undefined {
+  for (const [re, family] of DEPARTMENT_FAMILY) if (re.test(department)) return family;
+  if (DEPARTMENT_NONE.test(department)) return null;
+  return undefined; // unrecognized department: not authoritative, fall through to the title
+}
+
 /** null = no family of its own: the generic fallback (site-lead and HR tiers only). */
-export function roleFamily(roleTitle: string): RoleFamily | null {
+export function roleFamily(roleTitle: string, department?: string | null): RoleFamily | null {
+  if (department) {
+    const fromDept = familyFromDepartment(department);
+    if (fromDept !== undefined) return fromDept;
+  }
   const t = roleTitle.toLowerCase();
 
   // 1. Sales roles that carry an engineering, design or accounting word. Decided before anything else.
@@ -30,6 +64,8 @@ export function roleFamily(roleTitle: string): RoleFamily | null {
 
   // 2. Finance roles that carry an industry word ("Construction Accountant" is finance, not construction).
   if (has(/\baccount(?:ant|ants|ing)\b|\baccounts (?:payable|receivable)\b|\bfinance\b/, t)) return "finance";
+  //    HR/recruiting, title-only fallback (the department check above already covers boards that tag it).
+  if (has(/\bhr\b|\bhuman resources\b|\brecruit\w*|\btalent acquisition\b|\bpeople (?:operations|ops|partners?)\b|\bchief people officer\b/, t)) return "hr";
 
   // 3. The trade and industry families, in the original order (first match wins).
   //    "Manufacturing Intelligence" is a software product, not a plant.
@@ -59,6 +95,7 @@ export const FAMILY_TITLES: Record<RoleFamily, string[]> = {
   procurement: ["Procurement Manager", "Purchasing Director", "Supply Chain Manager"],
   sales: ["Director of Business Development", "Sales Manager", "VP Sales"],
   finance: ["Controller", "Finance Director", "CFO"],
+  hr: ["VP People", "Head of Talent Acquisition", "Director of Talent Acquisition"],
 };
 
 // What a role with no family of its own gets. These are the site-lead and HR titles, not a function's own, so
@@ -86,7 +123,7 @@ export const isGenericFallback = (hints: string[]) =>
  * point at someone for them. Whether they should be filtered out before ever reaching enrichment
  * is a separate, unresolved question.
  */
-export function deriveJobTitleHints(roleTitle: string): string[] {
-  const family = roleFamily(roleTitle);
+export function deriveJobTitleHints(roleTitle: string, department?: string | null): string[] {
+  const family = roleFamily(roleTitle, department);
   return family ? [...FAMILY_TITLES[family]] : [...GENERIC_FALLBACK_TITLES];
 }

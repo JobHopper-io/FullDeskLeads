@@ -3,7 +3,7 @@ import type { InteractionEvent, QueueItem } from "../../lib/types";
 import OutcomePanel from "../OutcomePanel";
 import ViewToggle from "../ViewToggle";
 import { DiscoveryQuestions, Placeholder } from "../IntelligenceSheet/IntelligenceSheet";
-import { objectionsFor, plantLayerFor } from "../../lib/intelligence";
+import { objectionsFor, plantArchetypeOf, plantLayerFor } from "../../lib/intelligence";
 
 interface Props {
   item: QueueItem;
@@ -28,7 +28,9 @@ const STEPS: { label: string; cue: string; words: (item: QueueItem) => ReactNode
       return plant?.showYourWork ? (
         <div className="guided-lines">{plant.showYourWork.map((q) => <p key={q} className="guided-words">“{q}”</p>)}</div>
       ) : (
-        <Placeholder>{plant ? "Show-your-work questions are for plant-floor roles; this one isn't." : "Show-your-work questions aren't generated yet."}</Placeholder>
+        <Placeholder>
+          {plantArchetypeOf(i) ? "Show-your-work questions are for plant-floor roles; this one isn't." : "No plant archetype on file for this company yet."}
+        </Placeholder>
       );
     },
   },
@@ -197,7 +199,11 @@ export default function GuidedSheet({ item, onBack, onLogged }: Props) {
             {plant?.gap ? (
               <p className="guided-plant">{plant.gap}</p>
             ) : (
-              <Placeholder>{plant ? "No gap line: it compares a maintenance posting with what the plant runs, and this isn't one." : "Gap analysis isn't generated yet."}</Placeholder>
+              <Placeholder>
+                {plantArchetypeOf(item)
+                  ? "No gap line: it compares a maintenance posting with what the plant runs, and this isn't one."
+                  : "No plant archetype on file for this company yet."}
+              </Placeholder>
             )}
           </section>
         </div>

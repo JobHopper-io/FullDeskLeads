@@ -4,7 +4,7 @@ import { callCourier } from "./courier.js";
 import { callOpenRouter } from "./openrouter.js";
 import { fixedObjections, type FixedObjection } from "./objections.js";
 import { fixedQuestions } from "./questions.js";
-import { ARCHETYPES, COMPANY_SOURCES, archetypeForEmployer } from "./sources.js";
+import { ARCHETYPES, COMPANY_SOURCES, archetypeForEmployer, industryWordFor } from "./sources.js";
 import { verifyGeneration, type Generation, type Verification } from "./verify.js";
 
 export type SourceKey = keyof typeof COMPANY_SOURCES;
@@ -183,7 +183,7 @@ export async function generateIntelligence(
   const attribution = { employer, archetype, ok: archetypeForEmployer(employer) === archetype };
   const base = {
     hiringSignalId: signal.id, roleTitle: signal.role_title.trim(), source: key, inputs, sentences, generation: null, verification: null,
-    objections: { static: true as const, pairs: fixedObjections(COMPANY_SOURCES[key].archetype, signal.role_title) },
+    objections: { static: true as const, pairs: fixedObjections(industryWordFor(employer), signal.role_title, true) },
     discoveryQuestions: { static: true as const, questions: fixedQuestions(signal.opening_count) },
     roleIntelligence: null,
     attribution,

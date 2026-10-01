@@ -7,7 +7,7 @@ import { callSentences, generateIntelligence, stripForCall, titleForCall } from 
 import { operatingEmployer } from "../packages/sources/src/jobDetails.js";
 import { postingText } from "../packages/sources/src/jobDetails.js";
 import { applicantsFor, fixedObjections } from "../packages/pipeline/src/intelligence/objections.js";
-import { COMPANY_SOURCES, archetypeForEmployer } from "../packages/pipeline/src/intelligence/sources.js";
+import { ARCHETYPES, COMPANY_SOURCES, archetypeForEmployer, industryWordFor } from "../packages/pipeline/src/intelligence/sources.js";
 import { fixedQuestions } from "../packages/pipeline/src/intelligence/questions.js";
 import { intelligenceReviewer, readVerdict, reviewGeneration, reviewUser } from "../packages/pipeline/src/intelligence/review.js";
 import { DESCRIPTORS, busyReply, gapLine, whoReply } from "../packages/pipeline/src/intelligence/plant.js";
@@ -144,17 +144,24 @@ assert.equal(titleForCall("Field Service –Lead"), "Field Service Lead"); asser
 // industry slot is "steel fabrication"; another Crest company's posting gets no archetype and so no filled slot.
 const dt = archetypeForEmployer(operatingEmployer("Crest Industries", { categories: { department: "DIS-TRAN Steel" } }));
 assert.equal(dt, "STEEL_POLE_STRUCTURE_FAB");
-assert.equal(fixedObjections(dt!, "Fitter I")[1].response, "Makes sense. Are you getting steel fabrication people through it, or mostly general welding applicants?");
-assert.match(fixedObjections(dt!, "Fitter I")[3].response, /the steel fabrication background\?$/);
+assert.equal(fixedObjections(ARCHETYPES[dt!].industry, "Fitter I", true)[1].response, "Makes sense. Are you getting steel fabrication people through it, or mostly general welding applicants?");
+assert.match(fixedObjections(ARCHETYPES[dt!].industry, "Fitter I", true)[3].response, /the steel fabrication background\?$/);
 assert.equal(archetypeForEmployer(operatingEmployer("Crest Industries", { categories: { department: "Millennium Galvanizing" } })), null);
 assert.equal(archetypeForEmployer("Industrial Electric Manufacturing"), "SWITCHGEAR_ASSEMBLY");
+// A lead with no plant archetype: "We post our own" uses the company's own business, never drops the slot, and the
+// applicant-pool guess never pretends to know a trade it has none of — always "general applicants".
+assert.equal(industryWordFor("Stripe"), "fintech");
+assert.equal(industryWordFor("Millennium Galvanizing"), "the industry", "a company with no archetype and no mapped business still gets a word, never a guess");
+assert.equal(fixedObjections(industryWordFor("Stripe"), "Senior Software Engineer, Build Loop", false)[1].response, "Makes sense. Are you getting fintech people through it, or mostly general applicants?");
+assert.equal(fixedObjections(industryWordFor("Stripe"), "Staff Software Engineer, Data Warehouse", false)[1].response, "Makes sense. Are you getting fintech people through it, or mostly general applicants?", "the warehouse-keyword false positive never fires without an archetype");
 // The intelligence splitter doesn't end a sentence at a state code or the dialog's abbreviations.
 assert.deepEqual(callSentences("DIS-TRAN Steel has an opening at our Pineville, LA. plant. Reimbursement (e.g. gym). Contact me. Next one."), ["DIS-TRAN Steel has an opening at our Pineville, LA. plant.", "Reimbursement (e.g. gym).", "Contact me.", "Next one."]);
 // Objections are the spec's fixed set, never generated, with the archetype's industry word in the slot.
 assert.deepEqual(rj.objections.pairs.map((p) => p.objection), ["We don't use agencies.", "We post our own.", "Too expensive.", "Email me something."]);
 assert.equal(rj.objections.pairs[1].response, "Makes sense. Are you getting switchgear people through it, or mostly general applicants?", "a role outside every family gets the fallback");
-assert.equal(applicantsFor("CNC Machinist"), "general machinist applicants"); assert.equal(applicantsFor("Materials Supervisor"), "general materials applicants");
-assert.equal(applicantsFor("Equipment Operator"), "general material handling applicants"); assert.equal(applicantsFor("Machine Operator"), "general equipment operator applicants"); assert.equal(applicantsFor("Maintenance Technician"), "general maintenance applicants");
+assert.equal(applicantsFor("CNC Machinist", true), "general machinist applicants"); assert.equal(applicantsFor("Materials Supervisor", true), "general materials applicants");
+assert.equal(applicantsFor("Equipment Operator", true), "general material handling applicants"); assert.equal(applicantsFor("Machine Operator", true), "general equipment operator applicants"); assert.equal(applicantsFor("Maintenance Technician", true), "general maintenance applicants");
+assert.equal(applicantsFor("Maintenance Technician", false), "general applicants", "no archetype: never guesses a trade, even off a title that would otherwise match one");
 assert.ok(!JSON.stringify(rj.objections).includes("foundry") && !JSON.stringify(rj.objections).includes("{industry}"));
 const t = await generateIntelligence(signal, "INDUSTRIAL_ELECTRIC", null, "Industrial Electric Manufacturing", failing("timeout"));
 assert.ok(!t.ok && /TimeoutError/.test(t.error!) && t.attempts === 2, "a timed-out lead fails cleanly after one retry");
@@ -213,7 +220,9 @@ console.log("ok: review gate");
   assert.match(gapLine("SWITCHGEAR_ASSEMBLY", "Maintenance Technician", "Keep things running.")!, /^Posting never mentions /);
   assert.equal(busyReply(null), "No problem — one question and I'll let you go. Is this one still open?");
   assert.equal(busyReply(3), "No problem — one question and I'll let you go. Are those still open?");
-  assert.equal(whoReply("Buyer"), "Recruiter — manufacturing only. Not a temp shop.");
-  assert.equal(whoReply("Maintenance Technician"), "Recruiter — maintenance only, manufacturing only. Not a temp shop.");
+  assert.equal(whoReply("Buyer", "manufacturing"), "Recruiter — manufacturing only. Not a temp shop.");
+  assert.equal(whoReply("Maintenance Technician", "manufacturing"), "Recruiter — maintenance only, manufacturing only. Not a temp shop.");
+  assert.equal(whoReply("Recruiter", null), "Recruiter. Not a temp shop.", "no archetype: never claims manufacturing for a company that isn't one");
+  assert.equal(whoReply("Superintendent", "commercial construction"), "Recruiter — commercial construction only. Not a temp shop.", "a non-manufacturing archetype (COMMERCIAL_CONSTRUCTION_GC) names its own domain, never 'manufacturing'");
   console.log("ok: plant layer");
 }
