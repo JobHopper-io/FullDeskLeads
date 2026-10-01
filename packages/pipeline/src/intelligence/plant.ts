@@ -53,6 +53,24 @@ export const PLANT_LAYER: Partial<Record<Archetype, PlantLayer>> = {
       { label: "building systems", words: /\bhvac\b|building systems|\bplumbing\b|\bboilers?\b|\bcompressors?\b/i },
     ],
   },
+  /**
+   * Agent-authored 2026-10-02 from sources.ts's archetype line, modeled on construction realities (trade
+   * coordination, schedule, safety, GC-specific hiring pressure) rather than the foundry/switchgear shape — needs
+   * Schepmont's review before it's relied on in a real call, same caveat as the SWITCHGEAR_ASSEMBLY copy above.
+   *
+   * No gapItems: the spec's gap compares a maintenance posting against the equipment it keeps running, and that
+   * concept doesn't map onto GC hiring at all (a superintendent or carpenter isn't "running equipment" the way a
+   * maintenance tech is) — isMaintenance(roleTitle) is false for every SpawGlass title below, so gapLine() already
+   * returns null here without needing an empty gapItems to do it; this stays empty rather than forcing a fit.
+   */
+  COMMERCIAL_CONSTRUCTION_GC: {
+    whyHard: "a commercial GC jobsite runs several subcontractor trades on one schedule at once, with the GC itself on the hook for the safety and quality standards across all of them. Plenty of people have run one trade; fewer have run a whole site's schedule and safety program, and almost nobody qualified for that is actively applying.",
+    showYourWork: [
+      "Looks like you're coordinating several subcontractor trades on one schedule here. Is keeping the trades sequenced the part that eats the most time, or is it something else?",
+      "Most of the people I place into GC superintendent and foreman roles came up running their own trade crews first. Are you finding that too, or have you had luck bringing people in a different way?",
+    ],
+    gapItems: [],
+  },
 };
 
 /** The spec's gap is defined for a maintenance hire: the equipment the role keeps running. No other role gets one. */
@@ -82,6 +100,14 @@ export const LIGHT_CLOSE_GUIDED = "If it's worth twenty minutes, we'd put interv
 export const busyReply = (openingCount: number | null) =>
   `No problem — one question and I'll let you go. ${openingCount !== null && openingCount > 1 ? "Are those still open?" : "Is this one still open?"}`;
 
-/** "Who is this?" (Figure 9.1). "maintenance only" is only true on a maintenance hire, so other roles drop it. */
-export const whoReply = (roleTitle: string) =>
-  isMaintenance(roleTitle) ? "Recruiter — maintenance only, manufacturing only. Not a temp shop." : "Recruiter — manufacturing only. Not a temp shop.";
+/**
+ * "Who is this?" (Figure 9.1). The "only" claim is only true for a plant lead, and names that archetype's own
+ * domain (sources.ts) rather than hardcoding "manufacturing" — COMMERCIAL_CONSTRUCTION_GC is a jobsite, not a
+ * plant, so claiming "manufacturing only" to a GC contact would be false. null domain (no archetype, e.g. a
+ * Stripe posting) drops the claim entirely rather than lying about what kind of shop this is. "maintenance only"
+ * is further only true on a maintenance hire within a plant domain.
+ */
+export const whoReply = (roleTitle: string, domain: string | null) =>
+  !domain ? "Recruiter. Not a temp shop."
+  : isMaintenance(roleTitle) ? `Recruiter — maintenance only, ${domain} only. Not a temp shop.`
+  : `Recruiter — ${domain} only. Not a temp shop.`;

@@ -23,9 +23,13 @@ const cases: [RoleFamily | null, string[]][] = [
   ["construction", ["Construction Manager", "Assistant Superintendent", "Superintendent - Healthcare Construction", "Preconstruction Estimator", "Project Manager - Civil Construction", "M.E.P. Coordinator - Building Commissioning"]],
   ["machining", ["CNC Machinist", "Boilermaker A", "Welder A", "Submerged Arc Welder - Night Shift", "Operations Manager - Fabrication (Night Shift)", "Metal Fabrication Floor Lead"]],
   ["procurement", ["Buyer", "Senior Buyer", "Purchasing Supervisor"]],
+  // "HR Generalist" and the recruiter title used to fall to the null bucket below (no HR family existed); the
+  // domain-expansion scoping pass (2026-10-01) found office-role HR titles scattering across null/sales/engineering
+  // at the new tech/HR sources and added this family so they land coherently instead.
+  ["hr", ["HR Generalist", "Recruiter / Talent Acquisition Partner"]],
   // ── real titles with no family: the generic fallback. Coverage gaps, NOT collisions; pinned so a change is visible ──
   [null, ["Field Service Technician", "Window Installer - Boston, MA", "Project Manager", "Project Executive", "Foreman", "Estimator", "Quality Control Manager", "Forklift Operator I", "Shipping Technician",
-    "IT Systems Administrator", "Sr. ERP Developer", "HR Generalist", "Recruiter / Talent Acquisition Partner", "Custodian", "Brand Ambassador - Buffalo, NY", "Director of Operations", "Operations Supervisor", "Supply Chain Manager"]],
+    "IT Systems Administrator", "Sr. ERP Developer", "Custodian", "Brand Ambassador - Buffalo, NY", "Director of Operations", "Operations Supervisor", "Supply Chain Manager"]],
   // ── SYNTHETIC collisions checked for (no real instance today) ─────────────
   [null, ["Learning Facilitator", "Engine Rebuild Technician", "Salesforce Developer", "Financial Analyst", "Wholesale Assistant"]],
   ["sales", ["Sales Manager", "Account Executive", "Enterprise Accounts Director", "Key Account Manager", "Inside Sales Representative"]],
@@ -40,4 +44,20 @@ assert.deepEqual(deriveJobTitleHints("Sales Engineer"), ["Director of Business D
 assert.deepEqual(deriveJobTitleHints("Construction Accountant"), ["Controller", "Finance Director", "CFO"]);
 assert.deepEqual(deriveJobTitleHints("Senior Salesforce Administrator"), ["Operations Manager", "General Manager", "HR Manager"]);
 assert.deepEqual(deriveJobTitleHints("Welder"), ["Plant Manager", "Production Manager", "Operations Manager"]);
+assert.deepEqual(deriveJobTitleHints("HR Generalist"), ["VP People", "Head of Talent Acquisition", "Director of Talent Acquisition"]);
+
+// ── department as the primary signal (domain-expansion scoping pass, 2026-10-01) ──────────────────────────────────
+// Real false positives found pulling postings from 17 tech/HR Greenhouse boards: the title regex (tuned on
+// industrial titles) collided with ordinary tech-company vocabulary. Department, when the board sets one, is now
+// checked first and is authoritative — the title is never consulted once a department resolves.
+assert.equal(f("Senior Software Engineer, Build Loop", "Engineering"), "engineering", "title alone used to match \"construction\" on \"build\"");
+assert.equal(f("Staff Software Engineer, Data Warehouse", "Engineering"), "engineering", "title alone used to match \"warehouse\"");
+assert.equal(f("Production Designer", "Design"), null, "title alone used to match \"production\"; Design department means no trade family, not a guess");
+assert.equal(f("Director, People Partners - Product, Design & Engineering", "People"), "hr", "title alone used to match \"engineering\" on the word in the title; department wins");
+// A department the map doesn't recognize (a company's own numbered/internal code) isn't authoritative: falls through
+// to the title exactly as before departments existed.
+assert.equal(f("Welder", "8611 Security Analytics"), "machining");
+assert.equal(f("Welder", undefined), "machining");
+// No department at all: unchanged, title-only behavior (the manufacturing book's boards mostly don't set one).
+assert.equal(f("Production Designer"), "production");
 console.log("role family checks passed");

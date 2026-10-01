@@ -101,7 +101,7 @@ export async function enrichHiringSignal(hiringSignalId: string): Promise<{
     // One search per tier (function, site lead, HR), so a tier's own titles can't be crowded out of the top results
     // by generic ones. A role with no family of its own has no function tier. Each person keeps the tier of the
     // (best) search that found them, and up to MAX_CONTACTS_PER_SIGNAL are picked across the tiers.
-    const familyHints = deriveJobTitleHints(hiringSignal.role_title);
+    const familyHints = deriveJobTitleHints(hiringSignal.role_title, hiringSignal.department);
     const tierTitles = buildTierTitles(isGenericFallback(familyHints) ? [] : familyHints);
     const tiers = TIER_ORDER.filter((t) => tierTitles[t].length > 0);
     const searched = await Promise.all(

@@ -19,6 +19,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createServiceClient, leadRepository, type HiringSignalRow } from "@fdl/db";
 import { loadEnv } from "@fdl/shared";
 import { MODEL } from "../packages/pipeline/src/intelligence/courier.js";
+import { openRouterUsage } from "../packages/pipeline/src/intelligence/openrouter.js";
 import { generateIntelligence, type GenerationResult, type SourceKey } from "../packages/pipeline/src/intelligence/generate.js";
 import { intelligenceReviewer, reviewGeneration, type ReviewResult } from "../packages/pipeline/src/intelligence/review.js";
 import { COMPANY_SOURCES } from "../packages/pipeline/src/intelligence/sources.js";
@@ -37,8 +38,8 @@ const logReview = (r: Result) => {
   if (v.ok) for (const p of v.problems) console.log(`      ${p.field} ${p.rule}${p.quote ? ` "${p.quote}"${p.quoteFound ? "" : " (not in the text)"}` : ""}: ${p.reason}`);
 };
 
-type Result = GenerationResult & { leadId: string; company: string; employer: string | null; signalStatus: string; review: ReviewResult | null };
-interface Staging { generatedAt: string; handCheck: string[]; results: Result[]; noArchetype: { leadId: string; company: string; employer: string | null; roleTitle: string }[] }
+type Result = GenerationResult & { leadId: string | null; company: string; employer: string | null; signalStatus: string; review: ReviewResult | null };
+interface Staging { generatedAt: string; generator?: string; usage?: typeof openRouterUsage; handCheck: string[]; results: Result[]; noArchetype: { leadId: string | null; company: string; employer: string | null; roleTitle: string }[] }
 
 /** Courier's credit limit for the period (HTTP 429): every later call fails the same way, so the run stops there. */
 const creditLimited = (error: string | null | undefined) => !!error?.startsWith("courier: HTTP 429");
@@ -59,6 +60,7 @@ if (writeFrom) {
   const leads = leadRepository(db);
   let generated = 0;
   for (const r of staging.results) {
+    if (!r.leadId) { console.log(`not a lead, not written: ${r.roleTitle} (signal ${r.hiringSignalId})`); continue; }
     const passed = cleared(r) && !hold.has(r.hiringSignalId);
     await leads.setIntelligence(r.leadId, {
       role_intelligence: { discoveryQuestions: r.discoveryQuestions.questions },
@@ -92,11 +94,18 @@ if (reviewFrom) {
 }
 const ids = arg("ids")?.split(",").filter(Boolean);
 
-type Row = { id: string; hiring_signals: HiringSignalRow & { companies: { name: string }; raw_signals: { raw_payload: { rawPayload: unknown } } | null } };
-const { data, error } = await db.from("leads").select("id, hiring_signals!inner(*, companies!inner(name), raw_signals(raw_payload))");
+type Row = { id: string | null; hiring_signals: HiringSignalRow & { companies: { name: string }; raw_signals: { raw_payload: { rawPayload: unknown } } | null } };
+// Every emitted lead; or, with --ids, exactly those hiring signals, whether or not a lead was emitted on them (the
+// fixed test set includes DIS-TRAN postings that never became leads). A signal with no lead is never written.
+const SIGNAL = "*, companies!inner(name), raw_signals(raw_payload)";
+const { data, error } = ids
+  ? await db.from("hiring_signals").select(`${SIGNAL}, leads(id)`).in("id", ids)
+  : await db.from("leads").select(`id, hiring_signals!inner(${SIGNAL})`);
 if (error) throw error;
-const rows = (data as unknown as Row[]).filter((r) => !ids || ids.includes(r.hiring_signals.id));
-if (ids && rows.length !== ids.length) throw new Error(`--ids: ${ids.length - rows.length} of them are not an emitted lead's signal`);
+const rows: Row[] = ids
+  ? (data as unknown as (Row["hiring_signals"] & { leads: { id: string }[] })[]).map((s) => ({ id: s.leads[0]?.id ?? null, hiring_signals: s }))
+  : (data as unknown as Row[]);
+if (ids && rows.length !== ids.length) throw new Error(`--ids: ${ids.length - rows.length} of them are not hiring signals`);
 
 const keyFor = (employer: string | null) => (Object.keys(COMPANY_SOURCES) as SourceKey[]).find((k) => COMPANY_SOURCES[k].employer === employer) ?? null;
 const inScope: [Row, SourceKey, string | null][] = [];
@@ -159,5 +168,8 @@ console.log(`\nby employer: ${JSON.stringify(byEmployer, null, 1)}`);
 console.log(`by field (generated leads): ${JSON.stringify(byField)}`);
 if (reviewer) console.log(`review:${reviewer}: ${results.filter(cleared).length} of ${results.filter(qaPassed).length} QA passes clear both gates`);
 console.log(`no archetype (fixed content and generation both skipped): ${JSON.stringify(Object.entries(noArchetype.reduce<Record<string, number>>((t, n) => ((t[`${n.company} / ${n.employer}`] = (t[`${n.company} / ${n.employer}`] ?? 0) + 1), t), {})))}`);
-writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), handCheck: HAND_CHECK, results, noArchetype } satisfies Staging, null, 2));
+const openrouter = process.env.GENERATION_BACKEND === "openrouter";
+const generator = openrouter ? `openrouter:${process.env.OPENROUTER_MODEL}` : `courier:${MODEL}`;
+if (openrouter) console.log(`${generator} usage: ${JSON.stringify({ ...openRouterUsage, generationIds: openRouterUsage.generationIds.length })}`);
+writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), generator, ...(openrouter && { usage: openRouterUsage }), handCheck: HAND_CHECK, results, noArchetype } satisfies Staging, null, 2));
 console.log(`\nstaging output (no database writes): ${out}\nhand-check list:\n${HAND_CHECK.map((h) => `  - ${h}`).join("\n")}`);
