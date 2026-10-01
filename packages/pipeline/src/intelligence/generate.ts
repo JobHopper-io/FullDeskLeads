@@ -1,6 +1,7 @@
 import type { HiringSignalRow } from "@fdl/db";
 import { NOT_A_SENTENCE_END } from "@fdl/sources";
 import { callCourier } from "./courier.js";
+import { callOpenRouter } from "./openrouter.js";
 import { fixedObjections, type FixedObjection } from "./objections.js";
 import { fixedQuestions } from "./questions.js";
 import { ARCHETYPES, COMPANY_SOURCES, archetypeForEmployer } from "./sources.js";
@@ -194,7 +195,9 @@ export async function generateIntelligence(
   let attempts = 0;
   try {
     for (let i = 0; i < FORMAT_ATTEMPTS; i++) {
-      const res = await callCourier({ system: SYSTEM, user: `INPUTS:\n${inputs}` }, fetchFn);
+      // GENERATION_BACKEND=openrouter swaps Courier for a hosted model (openrouter.ts); the prompt and QA are the same.
+      const call = process.env.GENERATION_BACKEND === "openrouter" ? callOpenRouter : callCourier;
+      const res = await call({ system: SYSTEM, user: `INPUTS:\n${inputs}` }, fetchFn);
       attempts += res.attempts;
       if (!res.ok) return { ...base, ok: false, error: `courier: ${res.error}`, attempts, latencyMs: Date.now() - started, ...(invalidOutputs.length && { invalidOutputs }) };
       const parsed = parse(res.text);
