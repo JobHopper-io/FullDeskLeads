@@ -305,10 +305,16 @@ strong, b, th { font-weight: 500; }
 .ls-log { position: sticky; bottom: 0; z-index: 5; margin-bottom: 12px; box-shadow: 0 -6px 16px -10px rgb(0 0 0 / 0.25); }
 
 /* Guided Sheet (spec 9.2): a stepped call runner over the same lead. Brand-kit colours only. */
-.guided-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.guided-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; }
 .guided-call { display: flex; align-items: center; gap: 16px; }
 .guided-contact { display: grid; text-align: right; font-weight: 500; font-size: 0.875rem; }
 .guided-cols { display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; gap: 24px; padding-top: 20px; align-items: start; }
+/* Below ~1100px the 220px + 280px side tracks don't fit: unlike .md-body (which already collapses at this
+   breakpoint) the squeezed centre column forced the sticky .guided-head to wrap onto many lines and grow tall
+   enough to cover the step cards beneath it, swallowing every tap on "next step" / "pushed back" (stuck on step 1). */
+@media (max-width: 1100px) {
+  .guided-cols { grid-template-columns: minmax(0, 1fr); }
+}
 .guided-left, .guided-steps, .guided-right { display: grid; gap: 16px; }
 .guided h3.eyebrow { margin: 0 0 10px; font-size: 0.6875rem; } /* beats .l2 h3 so side headings stay eyebrow-sized */
 .guided-rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

@@ -20,6 +20,7 @@ import { createServiceClient, leadRepository, type HiringSignalRow } from "@fdl/
 import { loadEnv } from "@fdl/shared";
 import { MODEL } from "../packages/pipeline/src/intelligence/courier.js";
 import { openRouterUsage } from "../packages/pipeline/src/intelligence/openrouter.js";
+import { openAiUsage } from "../packages/pipeline/src/intelligence/openai.js";
 import { generateIntelligence, type GenerationResult, type SourceKey } from "../packages/pipeline/src/intelligence/generate.js";
 import { intelligenceReviewer, reviewGeneration, type ReviewResult } from "../packages/pipeline/src/intelligence/review.js";
 import { COMPANY_SOURCES } from "../packages/pipeline/src/intelligence/sources.js";
@@ -27,7 +28,7 @@ import { operatingEmployer, postingText } from "../packages/sources/src/jobDetai
 
 const reviewer = intelligenceReviewer();
 /** Recorded with every generated field written: which gates it passed. qa_only = deterministic QA, no reviewer. */
-const MARKER = `courier:${MODEL}; review:${reviewer ?? "qa_only"}`;
+const markerFor = (generator: string) => `${generator}; review:${reviewer ?? "qa_only"}`;
 const qaPassed = (r: Result) => r.ok && r.verification!.pass && r.generation!.why_now.text !== null && r.generation!.opening_script.text !== null;
 /** Both gates: the deterministic QA and, when a reviewer is set, that same reviewer's pass. */
 const cleared = (r: Result) => qaPassed(r) && (!reviewer || (r.review?.reviewer === reviewer && r.review.pass));
@@ -39,7 +40,7 @@ const logReview = (r: Result) => {
 };
 
 type Result = GenerationResult & { leadId: string | null; company: string; employer: string | null; signalStatus: string; review: ReviewResult | null };
-interface Staging { generatedAt: string; generator?: string; usage?: typeof openRouterUsage; handCheck: string[]; results: Result[]; noArchetype: { leadId: string | null; company: string; employer: string | null; roleTitle: string }[] }
+interface Staging { generatedAt: string; generator?: string; usage?: typeof openRouterUsage | typeof openAiUsage; handCheck: string[]; results: Result[]; noArchetype: { leadId: string | null; company: string; employer: string | null; roleTitle: string }[] }
 
 /** Courier's credit limit for the period (HTTP 429): every later call fails the same way, so the run stops there. */
 const creditLimited = (error: string | null | undefined) => !!error?.startsWith("courier: HTTP 429");
@@ -58,6 +59,10 @@ if (writeFrom) {
   const unknown = [...hold].filter((id) => !staging.results.some((r) => r.hiringSignalId === id));
   if (unknown.length) throw new Error(`--hold: not in the staging file: ${unknown.join(", ")}`);
   const leads = leadRepository(db);
+  // The marker records which model actually generated this staging file, not whichever backend happens to be
+  // configured right now (GENERATION_BACKEND can differ between the --out run and this --write run) — staging files
+  // from before `generator` existed (courier-only) fall back to courier's own MODEL.
+  const marker = markerFor(staging.generator ?? `courier:${MODEL}`);
   let generated = 0;
   for (const r of staging.results) {
     if (!r.leadId) { console.log(`not a lead, not written: ${r.roleTitle} (signal ${r.hiringSignalId})`); continue; }
@@ -65,11 +70,11 @@ if (writeFrom) {
     await leads.setIntelligence(r.leadId, {
       role_intelligence: { discoveryQuestions: r.discoveryQuestions.questions },
       objections: r.objections.pairs,
-      ...(passed && { why_now: r.generation!.why_now.text, opening_script: r.generation!.opening_script.text, generation_model_version: MARKER }),
+      ...(passed && { why_now: r.generation!.why_now.text, opening_script: r.generation!.opening_script.text, generation_model_version: marker }),
     });
     if (passed) generated++;
   }
-  console.log(`written: fixed content on ${staging.results.length} lead(s); generated why_now + opening_script (${MARKER}) on ${generated}; QA passes the reviewer failed: ${staging.results.filter((r) => qaPassed(r) && !cleared(r)).length}; held by hand check: ${hold.size}; untouched: ${staging.noArchetype.length} with no archetype`);
+  console.log(`written: fixed content on ${staging.results.length} lead(s); generated why_now + opening_script (${marker}) on ${generated}; QA passes the reviewer failed: ${staging.results.filter((r) => qaPassed(r) && !cleared(r)).length}; held by hand check: ${hold.size}; untouched: ${staging.noArchetype.length} with no archetype`);
   process.exit(0);
 }
 
@@ -168,8 +173,12 @@ console.log(`\nby employer: ${JSON.stringify(byEmployer, null, 1)}`);
 console.log(`by field (generated leads): ${JSON.stringify(byField)}`);
 if (reviewer) console.log(`review:${reviewer}: ${results.filter(cleared).length} of ${results.filter(qaPassed).length} QA passes clear both gates`);
 console.log(`no archetype (fixed content and generation both skipped): ${JSON.stringify(Object.entries(noArchetype.reduce<Record<string, number>>((t, n) => ((t[`${n.company} / ${n.employer}`] = (t[`${n.company} / ${n.employer}`] ?? 0) + 1), t), {})))}`);
-const openrouter = process.env.GENERATION_BACKEND === "openrouter";
-const generator = openrouter ? `openrouter:${process.env.OPENROUTER_MODEL}` : `courier:${MODEL}`;
-if (openrouter) console.log(`${generator} usage: ${JSON.stringify({ ...openRouterUsage, generationIds: openRouterUsage.generationIds.length })}`);
-writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), generator, ...(openrouter && { usage: openRouterUsage }), handCheck: HAND_CHECK, results, noArchetype } satisfies Staging, null, 2));
+const backend = process.env.GENERATION_BACKEND;
+const generator =
+  backend === "openrouter" ? `openrouter:${process.env.OPENROUTER_MODEL}`
+  : backend === "openai" ? `openai:${process.env.OPENAI_MODEL || "gpt-5-mini"}`
+  : `courier:${MODEL}`;
+const usage = backend === "openrouter" ? openRouterUsage : backend === "openai" ? openAiUsage : null;
+if (usage) console.log(`${generator} usage: ${JSON.stringify("generationIds" in usage ? { ...usage, generationIds: usage.generationIds.length } : usage)}`);
+writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), generator, ...(usage && { usage }), handCheck: HAND_CHECK, results, noArchetype } satisfies Staging, null, 2));
 console.log(`\nstaging output (no database writes): ${out}\nhand-check list:\n${HAND_CHECK.map((h) => `  - ${h}`).join("\n")}`);
