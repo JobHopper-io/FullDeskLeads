@@ -11,6 +11,7 @@ export * from "./repositories/contactRepository.js";
 export * from "./repositories/enrichmentAttemptRepository.js";
 export * from "./repositories/leadRepository.js";
 export * from "./repositories/leadAssignmentRepository.js";
+export * from "./repositories/recruiterPreferencesRepository.js";
 export * from "./repositories/configurationRepository.js";
 export * from "./repositories/exclusionRepository.js";
 export * from "./repositories/scoreRecordRepository.js";

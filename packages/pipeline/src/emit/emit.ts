@@ -10,6 +10,7 @@ import {
 import { CONTRACT_VERSION } from "@fdl/contracts";
 import { getDb } from "../db.js";
 import { assignPrimaryAndAlternates } from "../enrich/multiContact.js";
+import { assignLeadToTenant } from "../assign/assignLead.js";
 import { checkPostingStillLive, expireGonePosting } from "../verify/verifyLive.js";
 
 const log = createLogger("emit");
@@ -92,8 +93,14 @@ export async function emitLead(
       return { skipped: true, reason: `excluded: ${exclusion.exclusion_type}` };
     }
 
-    leadAssignment = await leadAssignments.create({ tenantId, leadId: lead.id });
-    log.info({ hiringSignalId, tenantId, leadId: lead.id, leadAssignmentId: leadAssignment.id }, "created lead_assignment");
+    // Saved Specialty Filters decide who gets it and whether it is a tagged fallback (assign/assignmentPolicy.ts).
+    const assigned = await assignLeadToTenant(db, { tenantId, lead, hiringSignal });
+    if ("skipped" in assigned) {
+      log.info({ hiringSignalId, tenantId, leadId: lead.id }, `lead_assignment not created: ${assigned.reason} — lead stays in the general pool`);
+      return { skipped: true, reason: assigned.reason };
+    }
+    leadAssignment = assigned.assignment;
+    log.info({ hiringSignalId, tenantId, leadId: lead.id, leadAssignmentId: leadAssignment.id, outsideFilters: leadAssignment.outside_filters }, "created lead_assignment");
   } else {
     log.info({ hiringSignalId, tenantId, leadId: lead.id }, "lead_assignment already exists for this tenant — reusing");
   }

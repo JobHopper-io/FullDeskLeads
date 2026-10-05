@@ -31,6 +31,8 @@ export interface QueueItem {
    */
   employer: string | null;
   whyNow: string | null;
+  /** Assigned only to fill the day, outside this recruiter's saved Specialty Filters (shown as "Outside your filters"). */
+  outsideFilters: boolean;
   // Layer 2 detail. Provenance is deliberately restrained: no vendor names, internal scores or stage detail.
   /** Lets the client mark every lead sharing this contact as flagged after one flag. */
   contactId: string;
@@ -74,6 +76,7 @@ interface AssignmentRow {
   delivered_at: string | null;
   next_action_at: string | null;
   lead_id: string;
+  outside_filters: boolean;
 }
 
 interface EventRow {
@@ -121,7 +124,7 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
 
   let query = request.db
     .from("lead_assignments")
-    .select("id, tenant_id, state, delivered_at, next_action_at, lead_id")
+    .select("id, tenant_id, state, delivered_at, next_action_at, lead_id, outside_filters")
     .eq("tenant_id", tenantId);
   // A follow-up in the future keeps the lead out of the queue until it's due.
   if (dueOnly) query = query.or(`next_action_at.is.null,next_action_at.lte.${new Date().toISOString()}`);
@@ -227,6 +230,7 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
           : null,
         employer: operatingEmployer(lead.hiring_signal.company.name, lead.hiring_signal.raw_signal?.raw_payload.rawPayload),
         whyNow: lead.why_now,
+        outsideFilters: a.outside_filters,
         noAnswerAttempts: attempts.get(a.id) ?? 0,
         alternateContacts: lead.alternate_contact_ids.flatMap((id) => contactsById.get(id) ?? []),
         nextActionAt: a.next_action_at,
@@ -238,8 +242,13 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
 }
 
 export async function queueRoutes(app: FastifyInstance) {
-  // Who am I — lets the web app hold the seat (tenant_id, role) without touching tables itself.
-  app.get("/me", { preHandler: requireSeat }, async (request) => request.seat);
+  // Who am I — lets the web app hold the seat (tenant_id, role) and its workspace name without touching tables itself.
+  // The tenant id comes from the verified seat, never the request.
+  app.get("/me", { preHandler: requireSeat }, async (request) => {
+    const { data, error } = await service().from("tenants").select("name").eq("id", request.seat.tenantId).single();
+    if (error) throw error;
+    return { ...request.seat, tenantName: data.name as string };
+  });
 
   app.get("/queue", { preHandler: requireSeat }, async (request) => loadItems(request, true));
 

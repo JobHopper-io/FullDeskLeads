@@ -12,6 +12,7 @@
     "@fdl/shared": "workspace:*",
     "@fdl/db": "workspace:*",
     "@fdl/sources": "workspace:*",
+    "@fdl/pipeline": "workspace:*",
     "fastify": "^5.12.4"
   },
   "devDependencies": {

@@ -4,6 +4,8 @@ import { apiGet } from "../lib/apiClient";
 import { dispositionLabel, useLeads } from "../lib/leads";
 import { DISPOSITIONS, NOT_A_FIT_REASONS } from "../lib/outcomes";
 import type { QueueItem, TimelineEvent } from "../lib/types";
+import FilterDropdown from "../components/FilterDropdown";
+import PageLayout from "../components/PageLayout";
 
 const at = (iso: string) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -75,16 +77,10 @@ export default function HistoryPage() {
   const selected = rows.find((i) => i.id === selectedId);
 
   return (
-    <div className="page history">
+    <PageLayout className="history">
       <div className="filters">
         <input type="search" className="search" placeholder="Search company, contact or note" value={q} onChange={(e) => setQ(e.target.value)} />
-        <label className={outcome ? "filter-chip on" : "filter-chip"}>
-          Outcome
-          <select value={outcome} onChange={(e) => setOutcome(e.target.value)}>
-            <option value="">Any</option>
-            {DISPOSITIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </select>
-        </label>
+        <FilterDropdown label="Outcome" anyLabel="Any" options={DISPOSITIONS} value={outcome} onChange={setOutcome} />
         <label className="filter-chip">From <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
         <label className="filter-chip">To <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
       </div>
@@ -106,6 +102,6 @@ export default function HistoryPage() {
         </ul>
         {selected ? <Timeline key={selected.id} item={selected} /> : <aside className="history-rail empty">Select a lead to see its timeline.</aside>}
       </div>
-    </div>
+    </PageLayout>
   );
 }

@@ -46,11 +46,12 @@ export async function outcomesRoutes(app: FastifyInstance) {
       const { tenantId, id: seatId } = request.seat;
       const { leadAssignmentId, disposition, note, followUpAt, notAFitReason, followUpIsCustom, timeZone } = request.body;
 
-      // do_not_contact needs the lead's company, bad_contact_data its primary contact. The assignment
-      // is read tenant-filtered first, so another tenant's ids are a 404, not a 403 (can't be probed).
+      // do_not_contact needs the lead's company; bad_contact_data and connected (phone verification,
+      // migration 0034) need its primary contact. The assignment is read tenant-filtered first, so another
+      // tenant's ids are a 404, not a 403 (can't be probed).
       let companyId: string | null = null;
       let contactId: string | null = null;
-      if (disposition === "do_not_contact" || disposition === "bad_contact_data") {
+      if (disposition === "do_not_contact" || disposition === "bad_contact_data" || disposition === "connected") {
         const { data: assignment, error } = await request.db
           .from("lead_assignments")
           .select("lead_id")
@@ -70,8 +71,9 @@ export async function outcomesRoutes(app: FastifyInstance) {
         companyId = (lead.hiring_signal as unknown as { company_id: string }).company_id;
       }
 
-      // One database transaction (migrations 0022/0023): the event, the state change and any suppression /
-      // contact flag land together or not at all. The function re-checks tenant ownership.
+      // One database transaction (migrations 0022/0023/0034): the event, the state change and any
+      // suppression / contact flag / phone verification land together or not at all. The function
+      // re-checks tenant ownership.
       const { data, error } = await request.db.rpc("log_outcome", {
         p_lead_assignment_id: leadAssignmentId,
         p_tenant_id: tenantId,

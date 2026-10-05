@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { isActive, isFollowUpDueToday, isOverdue, useLeads } from "../lib/leads";
 import type { QueueItem } from "../lib/types";
+import PageLayout from "../components/PageLayout";
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -27,7 +28,7 @@ export default function FollowUpsPage() {
   const upcoming = all.filter((i) => !isFollowUpDueToday(i));
 
   return (
-    <div className="page follow-ups">
+    <PageLayout className="follow-ups">
       <section>
         <h2>Due today <span className="count">{dueToday.length}</span></h2>
         {dueToday.length ? <ul className="fu-list">{dueToday.map((i) => <Entry key={i.id} item={i} />)}</ul> : <p className="empty">Nothing due today.</p>}
@@ -36,6 +37,6 @@ export default function FollowUpsPage() {
         <h2>Upcoming <span className="count">{upcoming.length}</span></h2>
         {upcoming.length ? <ul className="fu-list">{upcoming.map((i) => <Entry key={i.id} item={i} />)}</ul> : <p className="empty">No upcoming follow-ups.</p>}
       </section>
-    </div>
+    </PageLayout>
   );
 }

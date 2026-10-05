@@ -36,6 +36,9 @@ importers:
       '@fdl/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@fdl/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@fdl/shared':
         specifier: workspace:*
         version: link:../../packages/shared

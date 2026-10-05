@@ -2,6 +2,7 @@ import type { HiringSignalRow } from "@fdl/db";
 import { NOT_A_SENTENCE_END } from "@fdl/sources";
 import { callCourier } from "./courier.js";
 import { callOpenRouter } from "./openrouter.js";
+import { callOpenAi } from "./openai.js";
 import { fixedObjections, type FixedObjection } from "./objections.js";
 import { fixedQuestions } from "./questions.js";
 import { ARCHETYPES, COMPANY_SOURCES, archetypeForEmployer, industryWordFor } from "./sources.js";
@@ -74,8 +75,23 @@ export const stripForCall = (description: string) => callSentences(description).
  */
 export const titleForCall = (roleTitle: string) => roleTitle.replace(/[–—]/g, " ").replace(/\s+/g, " ").trim();
 
-/** The archetype's equipment and building lines describe what a maintenance tech contends with; only those roles get them. */
-const isMaintenance = (roleTitle: string) => /maintenance/i.test(roleTitle);
+/**
+ * Whether a role is close enough to the archetype's own floor/jobsite work that its contendsWith/equipment lines are
+ * safe grounding for the model to cite, per archetype (keyed the same as apps/web's PLANT_FLOOR, a separate copy
+ * since that one gates UI display of fixed copy, not what reaches the model — kept in sync by hand, not shared,
+ * so a change to one is a deliberate decision about the other, not a silent side effect).
+ *
+ * SWITCHGEAR_ASSEMBLY/STEEL_POLE_STRUCTURE_FAB only ever had a maintenance hire in mind (the only role the archetype's
+ * equipment literally describes), unchanged here. COMMERCIAL_CONSTRUCTION_GC has no maintenance title at all — its
+ * field roles (not an office role: estimating, accounting, preconstruction) are what the archetype describes, so
+ * without its own entry every SpawGlass posting would silently get no plant-archetype context at all (found scoping
+ * SpawGlass's archetype, 2026-10-02: the equipment/contendsWith lines never reached the model for any SpawGlass lead).
+ */
+const PLANT_CONTEXT_ROLE: Partial<Record<keyof typeof ARCHETYPES, RegExp>> = {
+  SWITCHGEAR_ASSEMBLY: /maintenance/i,
+  STEEL_POLE_STRUCTURE_FAB: /maintenance/i,
+  COMMERCIAL_CONSTRUCTION_GC: /superintendent|\bforeman\b|\bcarpenter\b|\bconcrete\b|surveyor|technician|m\.?e\.?p\.? coordinator|quality control|project (?:executive|manager)|owner.s representative|safety assistant|construction management intern/i,
+};
 
 /**
  * Everything the model may use, rendered once as plain text. Nothing else is sent. Every sentence of the plant text
@@ -98,7 +114,7 @@ export function buildInputs(signal: HiringSignalRow, key: SourceKey, description
   const desc = description ? callSentences(description) : [];
   const text = [
     `COMPANY: ${src.company}${src.parent ? ` (a ${src.parent} company)` : ""}`,
-    ...(isMaintenance(signal.role_title)
+    ...(PLANT_CONTEXT_ROLE[src.archetype]?.test(signal.role_title)
       ? [
           `PLANT ARCHETYPE: ${arch.name}`,
           `WHAT PEOPLE ON THIS KIND OF PLANT FLOOR DEAL WITH: ${id("T", arch.contendsWith)}`,
@@ -120,7 +136,7 @@ export function buildInputs(signal: HiringSignalRow, key: SourceKey, description
   return { text, sentences };
 }
 
-const SYSTEM = `You write call prep for a recruiter phoning a hiring contact about one job posting.
+const SYSTEM = `You write call prep for an agency recruiter — a third-party staffing recruiter, not the company's own in-house recruiter or HR team — phoning a hiring contact about one job posting.
 
 Use ONLY the facts in INPUTS. Do not use anything you know about this company, its industry, its location or the job market from outside INPUTS. Never state a number, date, name, piece of equipment or company detail that is not in INPUTS. If the posting's pay is "not stated", never mention pay, salary, wages or compensation. If a field cannot be written specifically from INPUTS, return null for it: generic filler is worse than nothing.
 
@@ -195,8 +211,9 @@ export async function generateIntelligence(
   let attempts = 0;
   try {
     for (let i = 0; i < FORMAT_ATTEMPTS; i++) {
-      // GENERATION_BACKEND=openrouter swaps Courier for a hosted model (openrouter.ts); the prompt and QA are the same.
-      const call = process.env.GENERATION_BACKEND === "openrouter" ? callOpenRouter : callCourier;
+      // GENERATION_BACKEND=openrouter/openai swaps Courier for a hosted model; the prompt and QA are the same either way.
+      const BACKENDS = { openrouter: callOpenRouter, openai: callOpenAi } as const;
+      const call = BACKENDS[process.env.GENERATION_BACKEND as keyof typeof BACKENDS] ?? callCourier;
       const res = await call({ system: SYSTEM, user: `INPUTS:\n${inputs}` }, fetchFn);
       attempts += res.attempts;
       if (!res.ok) return { ...base, ok: false, error: `courier: ${res.error}`, attempts, latencyMs: Date.now() - started, ...(invalidOutputs.length && { invalidOutputs }) };

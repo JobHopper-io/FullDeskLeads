@@ -10,6 +10,13 @@ export function seatRepository(db: SupabaseClient) {
       return data;
     },
 
+    // Assignment routing: every recruiter seat of a tenant.
+    listByTenant: async (tenantId: string): Promise<SeatRow[]> => {
+      const { data, error } = await db.from("seats").select("*").eq("tenant_id", tenantId).order("created_at");
+      if (error) throw error;
+      return data;
+    },
+
     // Day 2 seed script.
     create: async (input: { tenantId: string; userId: string; role: SeatRole }): Promise<SeatRow> => {
       const { data, error } = await db

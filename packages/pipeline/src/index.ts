@@ -11,3 +11,8 @@ export * from "./score/score.js";
 export * from "./emit/emit.js";
 export * from "./verify/verifyLive.js";
 export * from "./sweep/sweep.js";
+export * from "./enrich/roleFamily.js";
+export * from "./intelligence/sources.js";
+export * from "./match/leadMatch.js";
+export * from "./assign/assignmentPolicy.js";
+export * from "./assign/assignLead.js";

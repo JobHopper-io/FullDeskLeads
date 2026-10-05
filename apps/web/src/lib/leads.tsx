@@ -26,6 +26,8 @@ interface LeadsState {
   notice: string | null;
   logged: (item: QueueItem, event: InteractionEvent) => void;
   flagged: (contactId: string, flaggedAt: string) => void;
+  /** "Remove from My Day": the assignment is released (Opportunities work), not logged as an outcome. */
+  released: (item: QueueItem) => void;
 }
 
 const LeadsContext = createContext<LeadsState | null>(null);
@@ -74,5 +76,10 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
   const flagged = (contactId: string, flaggedAt: string) =>
     setItems((prev) => prev!.map((i) => (i.contactId === contactId ? { ...i, contactFlaggedAt: flaggedAt } : i)));
 
-  return <LeadsContext.Provider value={{ items, error, worked, notice, logged, flagged }}>{children}</LeadsContext.Provider>;
+  const released = (item: QueueItem) => {
+    setNotice(`Removed ${item.company} from My Day. It's back in Opportunities.`);
+    setItems((prev) => prev!.map((i) => (i.id !== item.id ? i : { ...i, state: "released" })));
+  };
+
+  return <LeadsContext.Provider value={{ items, error, worked, notice, logged, flagged, released }}>{children}</LeadsContext.Provider>;
 }

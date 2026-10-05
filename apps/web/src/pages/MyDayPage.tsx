@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Link } from "react-router";
+import { apiPost } from "../lib/apiClient";
 import { isActive, isDue, startOfToday, useLeads } from "../lib/leads";
 import type { QueueItem } from "../lib/types";
 import OutcomePanel from "../components/OutcomePanel";
 import JobDescription from "../components/JobDescription";
 import { EvidenceStrip, GapText, LeadCard, NotTheOne, Opening, Panel, PlantBand, Pushback, ShowYourWork } from "../components/IntelligenceSheet/IntelligenceSheet";
 import { contentTier } from "../lib/intelligence";
+import PageLayout from "../components/PageLayout";
 
 // Zero-padded to the width of the total, so it reads "07 of 36" and never shifts as it counts up.
 const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width), "0");
@@ -13,7 +16,7 @@ const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width),
 // (who, the plant, the opener, show-your-work, log it); right column is what you glance at (numbers, the gap,
 // objections, who else to try).
 export default function MyDayPage() {
-  const { items, worked, logged } = useLeads();
+  const { items, worked, logged, released } = useLeads();
 
   const today = startOfToday();
   // A bare lead (placeholders only) never opens the day ahead of one with content; the sort is stable, so the API's
@@ -29,8 +32,8 @@ export default function MyDayPage() {
   const dateLine = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 
   return (
-    <div className="my-day">
-      <header className="md-header">
+    <PageLayout flush className="my-day" header={
+      <div className="md-header">
         <div>
           <h1 className="md-title">My Day</h1>
           <p className="md-sub">
@@ -47,14 +50,33 @@ export default function MyDayPage() {
             <button disabled title="Autopilot isn't built yet">Autopilot <span className="soon">Soon</span></button>
           </div>
         </div>
-      </header>
-      {current ? <Sheet key={current.id} item={current} onLogged={(event) => logged(current, event)} /> : <p className="empty">Queue clear. Nothing left to call right now.</p>}
-    </div>
+      </div>
+    }>
+      {current ? (
+        <Sheet key={current.id} item={current} onLogged={(event) => logged(current, event)} onReleased={() => released(current)} />
+      ) : (
+        <p className="empty">Queue clear. Nothing left to call right now.</p>
+      )}
+    </PageLayout>
   );
 }
 
-function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeof OutcomePanel>[0]["onLogged"] }) {
+function Sheet({ item, onLogged, onReleased }: { item: QueueItem; onLogged: Parameters<typeof OutcomePanel>[0]["onLogged"]; onReleased: () => void }) {
   const detail = (section: string) => `/leads/${item.id}?section=${section}`;
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  async function remove() {
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await apiPost(`/lead-assignments/${item.id}/release`, {});
+      onReleased();
+    } catch (err) {
+      setRemoveError((err as Error).message);
+      setRemoving(false);
+    }
+  }
 
   return (
     <div className="md-body">
@@ -68,7 +90,11 @@ function Sheet({ item, onLogged }: { item: QueueItem; onLogged: Parameters<typeo
             <Link className="md-button" to={detail("script")}>Full script</Link>
             <Link className="md-button" to={detail("objections")}>Objection handling</Link>
             <JobDescription item={item} className="md-button" />
+            <button className="md-button" onClick={remove} disabled={removing} title="Puts this lead back in Opportunities, without logging an outcome">
+              {removing ? "Removing…" : "Remove from My Day"}
+            </button>
           </div>
+          {removeError && <span className="error">{removeError}</span>}
         </ShowYourWork>
         <div className="md-panel md-log">
           <OutcomePanel item={item} onLogged={onLogged} submitLabel="Save + next lead" pinnedSave />
