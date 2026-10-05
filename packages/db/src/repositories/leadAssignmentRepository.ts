@@ -20,13 +20,14 @@ export function leadAssignmentRepository(db: SupabaseClient) {
   return {
     // Day 10 emit: the tenant-scoped join between a global lead and this tenant. A lead can
     // only be assigned to a given tenant once (enforced by the tenant_id+lead_id unique index).
-    create: async (input: { tenantId: string; leadId: string; seatId?: string | null }): Promise<LeadAssignmentRow> => {
+    create: async (input: { tenantId: string; leadId: string; seatId?: string | null; outsideFilters?: boolean }): Promise<LeadAssignmentRow> => {
       const { data, error } = await db
         .from("lead_assignments")
         .insert({
           tenant_id: input.tenantId,
           lead_id: input.leadId,
           seat_id: input.seatId ?? null,
+          outside_filters: input.outsideFilters ?? false,
           delivered_at: new Date().toISOString(),
         })
         .select()

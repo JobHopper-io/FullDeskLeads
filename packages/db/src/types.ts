@@ -17,7 +17,7 @@ export type ExclusionType =
   | "house_account"
   | "competitor"
   | "previously_rejected";
-export type LeadAssignmentState = "new" | "viewed" | "contacted" | "converted" | "suppressed" | "expired";
+export type LeadAssignmentState = "new" | "viewed" | "contacted" | "converted" | "suppressed" | "expired" | "released";
 
 export interface TenantRow {
   id: string;
@@ -207,6 +207,8 @@ export interface LeadAssignmentRow {
   seat_id: string | null;
   state: LeadAssignmentState;
   delivered_at: string | null;
+  /** Assigned only to fill the day, outside the recruiter's saved specialty filters (migration 0038). */
+  outside_filters: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -219,4 +221,22 @@ export interface InteractionEventRow {
   event_type: string;
   payload: unknown;
   occurred_at: string;
+}
+
+export type PreferenceFallback = "expand_to_general_pool";
+export type ArchetypeFilter = "any" | "yes" | "no";
+
+/** A seat's saved Specialty Filters (migration 0038). Empty arrays = no filter on that axis. */
+export interface RecruiterPreferencesRow {
+  id: string;
+  seat_id: string | null;
+  tenant_id: string | null;
+  industry_filters: string[];
+  role_family_filters: string[];
+  freshness_filter: string[];
+  content_tier_filter: string[];
+  archetype_filter: ArchetypeFilter;
+  fallback_behavior: PreferenceFallback;
+  created_at: string;
+  updated_at: string;
 }
