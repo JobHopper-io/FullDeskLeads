@@ -13,6 +13,7 @@ import FollowUpsPage from "./pages/FollowUpsPage";
 import HistoryPage from "./pages/HistoryPage";
 import OpportunitiesPage from "./pages/OpportunitiesPage";
 import SettingsPage from "./pages/SettingsPage";
+import PageLayout from "./components/PageLayout";
 
 const count = (items: QueueItem[] | null, rule: (i: QueueItem) => boolean) => items?.filter(rule).length;
 
@@ -40,15 +41,10 @@ function Nav() {
 
 // Every screen reads the one shared lead list; this keeps the load/error states in one place.
 function Loaded({ children }: { children: ReactNode }) {
-  const { items, error, notice } = useLeads();
-  if (error) return <p className="error empty">Couldn't load your leads: {error}</p>;
-  if (!items) return <p className="empty">Loading leads…</p>;
-  return (
-    <>
-      {notice && <p className="outcome-logged app-notice" role="status">{notice}</p>}
-      {children}
-    </>
-  );
+  const { items, error } = useLeads();
+  if (error) return <PageLayout><p className="error empty">Couldn't load your leads: {error}</p></PageLayout>;
+  if (!items) return <PageLayout><p className="empty">Loading leads…</p></PageLayout>;
+  return children;
 }
 
 function Account({ name, email, role }: { name: string; email: string; role?: string }) {

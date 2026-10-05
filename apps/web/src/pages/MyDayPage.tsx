@@ -7,6 +7,7 @@ import OutcomePanel from "../components/OutcomePanel";
 import JobDescription from "../components/JobDescription";
 import { EvidenceStrip, GapText, LeadCard, NotTheOne, Opening, Panel, PlantBand, Pushback, ShowYourWork } from "../components/IntelligenceSheet/IntelligenceSheet";
 import { contentTier } from "../lib/intelligence";
+import PageLayout from "../components/PageLayout";
 
 // Zero-padded to the width of the total, so it reads "07 of 36" and never shifts as it counts up.
 const pad = (n: number, width: number) => String(n).padStart(Math.max(2, width), "0");
@@ -31,8 +32,8 @@ export default function MyDayPage() {
   const dateLine = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 
   return (
-    <div className="my-day">
-      <header className="md-header">
+    <PageLayout flush className="my-day" header={
+      <div className="md-header">
         <div>
           <h1 className="md-title">My Day</h1>
           <p className="md-sub">
@@ -49,13 +50,14 @@ export default function MyDayPage() {
             <button disabled title="Autopilot isn't built yet">Autopilot <span className="soon">Soon</span></button>
           </div>
         </div>
-      </header>
+      </div>
+    }>
       {current ? (
         <Sheet key={current.id} item={current} onLogged={(event) => logged(current, event)} onReleased={() => released(current)} />
       ) : (
         <p className="empty">Queue clear. Nothing left to call right now.</p>
       )}
-    </div>
+    </PageLayout>
   );
 }
 

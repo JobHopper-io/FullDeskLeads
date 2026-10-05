@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { isActive, startOfToday, useLeads } from "../lib/leads";
 import { confidenceBand, confidenceLabel } from "../lib/provenance";
+import FilterDropdown from "../components/FilterDropdown";
+import PageLayout from "../components/PageLayout";
 // The scorer's own location parser (a pure file, no deps), so a chip matches exactly what scoring matched.
 import { statesInLocation } from "../../../../packages/pipeline/src/score/geography";
 
@@ -14,18 +16,10 @@ function deliveredAge(iso: string | null) {
   return days <= 0 ? "Today" : days === 1 ? "1 day" : `${days} days`;
 }
 
-// A fixed chip: "Any" or one value. Native <select>, not a query builder.
-function Chip({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
-  return (
-    <label className={value ? "filter-chip on" : "filter-chip"}>
-      {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Any</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </label>
-  );
-}
+// "Any" or one value.
+const Chip = ({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) => (
+  <FilterDropdown label={label} anyLabel="Any" options={options.map((o) => ({ value: o, label: o[0].toUpperCase() + o.slice(1) }))} value={value} onChange={onChange} />
+);
 
 // Dense table for choosing leads, not calling them. Rows come in score order (best first) from the API.
 export default function NewLeadsPage() {
@@ -50,13 +44,10 @@ export default function NewLeadsPage() {
   );
 
   return (
-    <div className="page">
+    <PageLayout>
       <div className="filters">
         {/* companies.industry isn't populated for any lead yet, so there is nothing real to filter on. */}
-        <label className="filter-chip disabled" title="No market data yet">
-          Market
-          <select disabled><option>No market data yet</option></select>
-        </label>
+        <FilterDropdown label="Market" anyLabel="No market data yet" options={[]} value="" onChange={() => {}} disabled title="No market data yet" />
         <Chip label="Geography" value={state} options={stateOptions} onChange={setState} />
         <Chip label="Freshness" value={freshness} options={FRESHNESS} onChange={setFreshness} />
         <Chip label="Match" value={band} options={BANDS} onChange={setBand} />
@@ -85,6 +76,6 @@ export default function NewLeadsPage() {
         </table>
         {!rows.length && <p className="empty">No leads match these filters.</p>}
       </div>
-    </div>
+    </PageLayout>
   );
 }

@@ -3,7 +3,11 @@ import { Link } from "react-router";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { EMPTY_FILTERS, activeFilterCount, filterParams, toFilterState, type FilterState } from "../lib/specialtyFilters";
 import type { OpportunitiesResponse, OpportunityItem, PreferencesResponse } from "../lib/types";
-import { ActiveFilterChips, SpecialtyFilterControls } from "../components/SpecialtyFilterControls";
+import { SpecialtyFilterControls } from "../components/SpecialtyFilterControls";
+import FilterDropdown from "../components/FilterDropdown";
+import PageLayout from "../components/PageLayout";
+
+const SORT_OPTIONS = [{ value: "newest", label: "Newest posting" }, { value: "company", label: "Company name" }, { value: "tier", label: "Content tier" }];
 
 type Sort = "newest" | "company" | "tier";
 
@@ -126,18 +130,12 @@ export default function OpportunitiesPage() {
   const activeCount = activeFilterCount(filters);
 
   return (
-    <div className="page opportunities">
+    <PageLayout className="opportunities">
       <div className="filters">
         <input type="search" className="search" placeholder="Search company, role or contact" value={q} onChange={(e) => setQ(e.target.value)} />
         <SpecialtyFilterControls filters={filters} onChange={setFilters} industryOptions={saved?.options.industry ?? []} />
-        <label className="filter-chip">
-          Sort
-          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-            <option value="newest">Newest posting</option>
-            <option value="company">Company name</option>
-            <option value="tier">Content tier</option>
-          </select>
-        </label>
+        {activeCount > 0 && <button className="link-button" onClick={clearFilters}>Clear filters</button>}
+        <span className="filters-end"><FilterDropdown label="Sort" options={SORT_OPTIONS} value={sort} onChange={(v) => setSort(v as Sort)} /></span>
       </div>
 
       {saved?.configured && (
@@ -145,7 +143,6 @@ export default function OpportunitiesPage() {
           Opened with your saved Specialty Filters. Changes here last for this visit only; edit them in <Link to="/settings">Settings</Link>.
         </p>
       )}
-      <ActiveFilterChips filters={filters} onChange={setFilters} onClear={clearFilters} />
 
       {notice && <p className="outcome-logged" role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
@@ -167,7 +164,9 @@ export default function OpportunitiesPage() {
       ) : (
         <>
           <div className="table-wrap">
-            <table className="leads-table">
+            <table className="leads-table opp-table">
+              {/* Proportional columns: the table fills the layout's width instead of clumping left. */}
+              <colgroup><col style={{ width: "40px" }} /><col style={{ width: "34%" }} /><col style={{ width: "18%" }} /><col style={{ width: "11%" }} /><col style={{ width: "11%" }} /><col style={{ width: "9%" }} /><col /></colgroup>
               <thead>
                 <tr><th /><th>Company &amp; role</th><th>Industry</th><th>Freshness</th><th>Contact</th><th>Tier</th><th /></tr>
               </thead>
@@ -193,6 +192,6 @@ export default function OpportunitiesPage() {
         </>
       )}
       <p className="cell-sub">Job orders and meetings you log elsewhere are still saved in each lead's history; see <Link to="/history">History</Link>.</p>
-    </div>
+    </PageLayout>
   );
 }
