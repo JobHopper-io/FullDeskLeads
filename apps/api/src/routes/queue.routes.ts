@@ -242,8 +242,13 @@ async function loadItems(request: FastifyRequest, dueOnly: boolean): Promise<Que
 }
 
 export async function queueRoutes(app: FastifyInstance) {
-  // Who am I — lets the web app hold the seat (tenant_id, role) without touching tables itself.
-  app.get("/me", { preHandler: requireSeat }, async (request) => request.seat);
+  // Who am I — lets the web app hold the seat (tenant_id, role) and its workspace name without touching tables itself.
+  // The tenant id comes from the verified seat, never the request.
+  app.get("/me", { preHandler: requireSeat }, async (request) => {
+    const { data, error } = await service().from("tenants").select("name").eq("id", request.seat.tenantId).single();
+    if (error) throw error;
+    return { ...request.seat, tenantName: data.name as string };
+  });
 
   app.get("/queue", { preHandler: requireSeat }, async (request) => loadItems(request, true));
 

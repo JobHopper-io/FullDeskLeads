@@ -3,6 +3,8 @@ export interface Seat {
   id: string;
   tenantId: string;
   role: "owner" | "admin" | "recruiter";
+  /** The workspace (tenant) name. */
+  tenantName: string;
 }
 
 export interface QueueItem {
