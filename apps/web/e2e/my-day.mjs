@@ -55,7 +55,9 @@ const dueFu = items.filter((i) => active(i) && i.nextActionAt && Date.parse(i.ne
 check(navText[0].badge === String(workable), `My Day badge ${navText[0].badge} = workable leads ${workable}`);
 check(navText[1].badge === String(unworked), `New Leads badge ${navText[1].badge} = unworked leads ${unworked}`);
 check(navText[2].badge === String(dueFu), `Follow-Ups badge ${navText[2].badge} = due follow-ups ${dueFu}`);
-check(navText[3].badge === null && navText[3].soon, "Opportunities has no count (Soon)");
+// Opportunities is a real page now (no longer a stub): no "Soon" tag, and no count badge either —
+// its pool isn't part of the /leads fetch this nav derives counts from.
+check(navText[3].badge === null && !navText[3].soon, "Opportunities has no count, no Soon tag");
 check(navText[4].badge === null && navText[5].badge === null, "History and Settings have no count");
 const activeNav = await page.$eval(".app-nav a.active", (a) => ({ text: a.childNodes[0].textContent.trim(), shadow: getComputedStyle(a).boxShadow, bg: getComputedStyle(a).backgroundColor }));
 check(activeNav.text === "My Day" && activeNav.shadow.includes("rgb(232, 200, 122)") && activeNav.bg !== "rgba(0, 0, 0, 0)", `active item: gold left bar, darker background (${activeNav.bg})`);
@@ -182,9 +184,10 @@ await db.from("interaction_events").delete().eq("id", ev.id);
 const { id, ...rest } = before.row; await db.from("lead_assignments").update(rest).eq("id", A);
 check(eq(await snap(), before), "database restored byte-identical");
 
-console.log("6. Settings stub");
+console.log("6. Settings");
 await page.getByRole("link", { name: "Settings" }).click();
-check((await page.locator(".stub h2").innerText()).includes("not built yet"), `Settings: ${await page.locator(".stub h2").innerText()}`);
+await page.getByRole("heading", { name: "Specialty Filters" }).waitFor();
+check(await page.getByRole("heading", { name: "Profile" }).isVisible(), "Settings: Profile section (stub) and Specialty Filters both on the page");
 
 check(errors.length === 0, `no browser errors${errors.length ? " " + JSON.stringify(errors) : ""}`);
 await browser.close();
