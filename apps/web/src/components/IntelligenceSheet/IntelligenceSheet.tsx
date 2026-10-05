@@ -64,6 +64,7 @@ export function LeadCard({ item, tags }: { item: QueueItem; tags?: ReactNode }) 
         <div className="md-tags">
           {item.freshnessBand && <span className="md-tag">{item.freshnessBand}{days !== null && ` · ${plural(days, "day")}`}</span>}
           <FunctionMatchTag item={item} />
+          {item.outsideFilters && <span className="outside-filters-tag" title="Assigned to fill your day. It doesn't match your saved Specialty Filters.">Outside your filters</span>}
           {tags}
         </div>
         <h2 className="md-company">{item.company}</h2>

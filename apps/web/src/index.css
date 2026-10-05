@@ -224,6 +224,31 @@ strong, b, th { font-weight: 500; }
 .timeline { gap: 14px; margin-top: 8px; }
 .timeline li { display: grid; gap: 2px; font-size: 0.8125rem; padding-left: 14px; border-left: 2px solid var(--fdl-hairline); overflow-wrap: anywhere; }
 
+/* ── Opportunities: filters as disclosures of the same toggle chips OutcomePanel uses. ──────────── */
+.opp-filter-group summary { cursor: pointer; list-style: none; }
+.opp-filter-group summary::-webkit-details-marker { display: none; }
+.opp-filter-group summary::after { content: " ▾"; font-size: 0.625rem; }
+.opp-filter-group[open] { position: relative; }
+.opp-chip-row { position: absolute; z-index: 4; top: 100%; left: 0; margin-top: 6px; padding: 10px; background: var(--fdl-white); border: 1px solid var(--panel-line); border-radius: var(--fdl-radius); box-shadow: 0 6px 16px -10px rgb(0 0 0 / 0.3); width: max-content; max-width: min(360px, 80vw); }
+.opp-chip-row .chip { white-space: nowrap; }
+.opp-active-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.opp-bulk-bar { display: flex; align-items: center; gap: 12px; background: var(--fdl-green-tint-08); border-radius: var(--fdl-radius); padding: 10px 14px; }
+.opp-bulk-bar span { font-size: 0.8125rem; color: var(--color-muted); }
+
+/* ── Settings ─────────────────────────────────────────────────────────── */
+.settings { max-width: 880px; }
+.settings-title { font-size: 1.625rem; }
+.settings-section { display: grid; gap: 14px; padding: 20px 24px; }
+.settings-section h2 { font-size: 1.125rem; }
+/* The "this also changes who you're assigned" statement: plainly readable body text, not a tooltip or a caption. */
+.settings-note { margin: 0; font-size: 0.875rem; line-height: 1.55; border-left: 3px solid var(--accent-gold); padding-left: 12px; max-width: 70ch; }
+.settings-count { margin: 0; font-size: 0.875rem; }
+.settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+/* A lead that doesn't match the recruiter's saved Specialty Filters (fallback-assigned on My Day, or browsing Opportunities). */
+.outside-filters-tag { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 2px; font-size: 0.625rem; font-weight: 500; text-transform: uppercase; letter-spacing: var(--fdl-tracking-eyebrow);
+  line-height: 1.5; color: var(--accent-rust); background: color-mix(in srgb, var(--accent-rust) 12%, var(--fdl-white)); vertical-align: middle; }
+.md-tags .outside-filters-tag { margin-left: 0; }
+
 .stub { max-width: 640px; }
 .stub p { margin: 0; color: var(--color-muted); }
 

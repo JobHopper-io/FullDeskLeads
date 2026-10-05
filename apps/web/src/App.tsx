@@ -31,7 +31,7 @@ function Nav() {
       <NavLink to="/follow-ups" title={overdue ? `${overdue} overdue` : undefined}>
         Follow-Ups{badge(count(items, isFollowUpDueToday), overdue ? "nav-badge overdue" : "nav-badge")}
       </NavLink>
-      <NavLink to="/opportunities">Opportunities<span className="soon">Soon</span></NavLink>
+      <NavLink to="/opportunities">Opportunities</NavLink>
       <NavLink to="/history">History</NavLink>
       <NavLink to="/settings">Settings</NavLink>
     </nav>

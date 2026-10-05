@@ -24,6 +24,8 @@ export interface QueueItem {
   /** The posting's operating employer (a Crest posting's Lever department, else the company); see apps/api. */
   employer: string | null;
   whyNow: string | null;
+  /** Assigned only to fill the day, outside this recruiter's saved Specialty Filters. */
+  outsideFilters: boolean;
   // Layer 2 detail (see apps/api's QueueItem).
   contactId: string;
   contactFlaggedAt: string | null;
@@ -58,6 +60,31 @@ export interface InteractionEvent {
   state: string;
 }
 
+/** One row of GET /opportunities — a lead outside every recruiter's own My Day (apps/api's OpportunityItem). */
+export interface OpportunityItem {
+  leadId: string;
+  company: string;
+  roleTitle: string;
+  location: string | null;
+  industry: string;
+  roleFamily: string | null;
+  hasArchetype: boolean;
+  contentTier: 0 | 1 | 2;
+  contentTierName: "full" | "partial" | "bare";
+  /** The recruiter has saved Specialty Filters and this lead doesn't match them. */
+  outsideFilters: boolean;
+  freshnessBand: "fresh" | "recent" | "ageing" | "stale";
+  postedDate: string | null;
+  signalFirstSeen: string;
+  contactStatus: "verified" | "pending" | "none";
+  whyNowPreview: string | null;
+}
+
+export interface OpportunitiesResponse {
+  items: OpportunityItem[];
+  nextCursor: string | null;
+}
+
 /** One row of GET /lead-assignments/:id/events (History's timeline). */
 export interface TimelineEvent {
   id: string;
@@ -68,4 +95,21 @@ export interface TimelineEvent {
   follow_up_at: string | null;
   follow_up_note: string | null;
   not_a_fit_reason: string | null;
+}
+
+/** A recruiter's saved Specialty Filters (GET/PUT /me/preferences). Empty list = no filter on that axis. */
+export interface SpecialtyPreferences {
+  industry: string[];
+  roleFamily: string[];
+  freshness: string[];
+  tier: string[];
+  archetype: "any" | "yes" | "no";
+}
+
+export interface PreferencesResponse {
+  /** False only for a seat that never saved anything; a saved "Clear filters" is configured with every list empty. */
+  configured: boolean;
+  preferences: SpecialtyPreferences;
+  fallbackBehavior: "expand_to_general_pool";
+  options: { industry: string[] };
 }
