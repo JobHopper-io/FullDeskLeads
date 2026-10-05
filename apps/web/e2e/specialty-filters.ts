@@ -84,13 +84,13 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
   await page.goto(`${APP}/opportunities`, { waitUntil: "networkidle" });
-  await page.waitForSelector(".opp-active-chips");
-  let chips = await page.locator(".opp-active-chips .chip").allInnerTexts();
-  check(chips.length === 2 && chips.some((c) => c.startsWith("Maintenance")) && chips.some((c) => c.startsWith("Finance")), `default filter chips come from the table: ${chips.join(" | ")}`);
+  await page.waitForSelector(".fd--active");
+  const pills = (await page.locator(".fd--active .fd-trigger").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+  check(pills.length === 1 && /^Role family: (Maintenance, Finance|Finance, Maintenance)/.test(pills[0]), `default filters come from the table, shown as a pill: ${pills.join(" | ")}`);
   await page.screenshot({ path: `${SP}/opportunities-saved-default.png` });
   await putPrefs({});
   await page.goto(`${APP}/opportunities`, { waitUntil: "networkidle" });
-  check((await page.locator(".opp-active-chips").count()) === 0, "after saving \"see everything\", next load starts unfiltered");
+  check((await page.locator(".fd--active").count()) === 0, "after saving \"see everything\", next load starts unfiltered");
 
   console.log("\n3. Live count and the outside-your-filters badge on Opportunities");
   const baseAll = await countOf("");
@@ -110,10 +110,14 @@ try {
   await putPrefs({});
   await page.goto(`${APP}/settings`, { waitUntil: "networkidle" });
   check(await page.getByText(/automatically assigned to you/).isVisible(), "the assignment-effect statement is on the page as plain text");
-  await page.getByText("Role family").first().click();
-  await page.getByRole("checkbox", { name: "Maintenance" }).click();
-  await page.getByText(/currently match these filters/).waitFor();
-  await page.waitForFunction(() => /currently match/.test(document.querySelector(".settings-count")?.textContent ?? ""));
+  await page.locator(".fd", { hasText: "Role family" }).locator(".fd-trigger").click();
+  await page.getByRole("option", { name: "Maintenance" }).click();
+  await page.keyboard.press("Escape");
+  // The last count stays on screen ("… Updating…") while the new one loads, so wait for the settled number.
+  await page.waitForFunction((n) => {
+    const t = document.querySelector(".settings-count")?.textContent ?? "";
+    return !/Updating/.test(t) && new RegExp(`^${n}\\+? leads? currently match`).test(t);
+  }, baseMaint + 2, { timeout: 25000 }).catch(() => {});
   const liveText = await page.locator(".settings-count").innerText();
   check(new RegExp(`${baseMaint + 2}\\+? leads? currently match`).test(liveText), `live count updates before saving: "${liveText}"`);
   await page.screenshot({ path: `${SP}/settings-specialty-filters.png` });
